@@ -83,49 +83,6 @@
     },
     {
       "parameters": {
-        "url": "https://api.abuseipdb.com/api/v2/check",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "ipAddress",
-              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters0_Value', ``, 'string') }}"
-            },
-            {
-              "name": "maxAgeInDays",
-              "value": "90"
-            },
-            {
-              "name": "verbose"
-            }
-          ]
-        },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Key",
-              "value": "***REMOVED***"
-            },
-            {
-              "name": "Accept",
-              "value": "application/json"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequestTool",
-      "typeVersion": 4.4,
-      "position": [
-        128,
-        112
-      ],
-      "id": "3f4c9d53-eb3e-4e96-b631-d24937b03d1b",
-      "name": "AbuseIPDB-Enrichment"
-    },
-    {
-      "parameters": {
         "url": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('URL', ``, 'string') }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "virusTotalApi",
@@ -214,6 +171,54 @@
           "name": "DFIR-IRIS account"
         }
       }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Look up an IP address in AbuseIPDB to check if it has been reported for malicious activity. Returns abuse confidence score, country, ISP, and recent report counts. Use for any external/public IP encountered in the alert. Skip for RFC1918 private IPs (10.x, 172.16-31.x, 192.168.x) — they return no useful data.\n",
+        "url": "https://api.abuseipdb.com/api/v2/check",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "ipAddress",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters0_Value', ``, 'string') }}"
+            },
+            {
+              "name": "maxAgeInDays",
+              "value": "90"
+            },
+            {
+              "name": "verbose"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        128,
+        112
+      ],
+      "id": "3f4c9d53-eb3e-4e96-b631-d24937b03d1b",
+      "name": "enrich_ip_abuseipdb",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Y4WuoJifIcStqSTi",
+          "name": "AbuseIPDB account"
+        }
+      }
     }
   ],
   "pinData": {
@@ -281,7 +286,7 @@
         ]
       ]
     },
-    "AbuseIPDB-Enrichment": {
+    "VirusTotal - Hash": {
       "ai_tool": [
         [
           {
@@ -292,7 +297,7 @@
         ]
       ]
     },
-    "VirusTotal - Hash": {
+    "enrich_ip_abuseipdb": {
       "ai_tool": [
         [
           {
@@ -310,7 +315,7 @@
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "09012352-76ff-4f5f-98ef-c1f2931a4635",
+  "versionId": "ce816bf5-33c8-4dd1-95a3-908bf51e2bbf",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "d73c7df2dab3dc6daade1ece2f47b854bd0ded40ecf58169066132c9293df425"
