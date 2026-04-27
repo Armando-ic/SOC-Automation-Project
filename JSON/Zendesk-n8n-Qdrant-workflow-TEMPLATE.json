@@ -1,0 +1,680 @@
+{
+  "name": "My workflow 2",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "a8771cdb-4009-40b5-8ae0-6eec0c51484a",
+      "name": "When chat message received",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "position": [
+        592,
+        1072
+      ],
+      "webhookId": "a9668bb8-bbe8-418a-b5c9-ff7dd431244f",
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You are a cybersecurity expert trained on MITRE ATT&CK and enterprise incident response. Your job is to:\n1. Extract TTP information from SIEM data.\n2. Provide actionable remediation steps tailored to the alert.\n3. Cross-reference historical patterns and related alerts.\n4. Recommend external resources for deeper understanding.\n\nEnsure that:\n- TTPs are tagged with the tactic, technique name, and technique ID.\n- Remediation steps are specific and actionable.\n- Historical data includes related alerts and notable trends.\n- External links are relevant to the observed behavior.\n"
+        }
+      },
+      "id": "de6d6448-3bc6-42f4-b897-c37ea427f8b3",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        784,
+        1072
+      ],
+      "typeVersion": 1.7
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {}
+      },
+      "id": "5d32d931-e323-4674-8a33-d13e9461a7c3",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "position": [
+        720,
+        1280
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "id": "665f2438-2560-4869-b04a-765648bbe137",
+      "name": "Split Out",
+      "type": "n8n-nodes-base.splitOut",
+      "position": [
+        752,
+        1920
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "79459c3e-33f8-45d3-b5a0-3db4f594992e",
+      "name": "Embeddings OpenAI1",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "position": [
+        880,
+        2128
+      ],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "jsonMode": "expressionData",
+        "jsonData": "={{ $json.description }}",
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "id",
+                "value": "={{ $json.id }}"
+              },
+              {
+                "name": "name",
+                "value": "={{ $json.name }}"
+              },
+              {
+                "name": "killchain",
+                "value": "={{ $json.kill_chain_phases }}"
+              },
+              {
+                "name": "external",
+                "value": "={{ $json.external_references }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "8bacd8dd-04ed-426c-9682-5bd3bde07219",
+      "name": "Default Data Loader",
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "position": [
+        1008,
+        2144
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {},
+      "id": "9f7711bd-1665-4d91-89f2-127bf7c111db",
+      "name": "Token Splitter1",
+      "type": "@n8n/n8n-nodes-langchain.textSplitterTokenSplitter",
+      "position": [
+        1008,
+        2320
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {},
+      "id": "a785e03b-2495-417b-8d86-385383e462e1",
+      "name": "Window Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "position": [
+        880,
+        1280
+      ],
+      "typeVersion": 1.3
+    },
+    {
+      "parameters": {
+        "model": "text-embedding-3-large",
+        "options": {
+          "dimensions": 1536
+        }
+      },
+      "id": "a205c629-c68d-43f8-9136-76fd415c57a8",
+      "name": "Embeddings OpenAI2",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "position": [
+        1008,
+        1424
+      ],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "operation": "fromJson",
+        "options": {}
+      },
+      "id": "7b7e44c9-3aef-4f29-8982-0726a22d0aae",
+      "name": "Extract from File",
+      "type": "n8n-nodes-base.extractFromFile",
+      "position": [
+        544,
+        1920
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {},
+      "id": "b4fa00bc-448a-47ff-a919-4954e2cbbf79",
+      "name": "When clicking ‘Test workflow’",
+      "type": "n8n-nodes-base.manualTrigger",
+      "position": [
+        112,
+        1920
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Siem Alert Data:\nAlert: {{ $json.raw_subject }}\nDescription: {{ $json.description }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a cybersecurity expert trained on MITRE ATT&CK and enterprise incident response. Your job is to:\n1. Extract TTP information from SIEM data.\n2. Provide actionable remediation steps tailored to the alert.\n3. Cross-reference historical patterns and related alerts.\n4. Recommend external resources for deeper understanding.\n\nEnsure that:\n- TTPs are tagged with the tactic, technique name, and technique ID.\n- Remediation steps are specific and actionable.\n- Historical data includes related alerts and notable trends.\n- External links are relevant to the observed behavior.\n\nPlease output your response in html format, but do not include ```html at the beginning \n"
+        }
+      },
+      "id": "2b52675a-10b0-4abe-b5af-135e855db4c2",
+      "name": "AI Agent1",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        928,
+        272
+      ],
+      "typeVersion": 1.7
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {}
+      },
+      "id": "6b9d45d6-dc38-48d8-91f7-954f37e4cd15",
+      "name": "OpenAI Chat Model1",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "position": [
+        864,
+        480
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "model": "text-embedding-3-large",
+        "options": {
+          "dimensions": 1536
+        }
+      },
+      "id": "9c9fa438-36eb-48bb-b4e7-70c3cf59f97a",
+      "name": "Embeddings OpenAI",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "position": [
+        1152,
+        672
+      ],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "30a5e618-c85e-4e40-abd6-8b93eebff348",
+      "name": "Loop Over Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [
+        528,
+        272
+      ],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "content": "![n8n](https://uploads.n8n.io/templates/qdrantlogo.png)\n## Embed your Vector Store\nTo provide data for your Vector store, you need to pass it in as JSON, and ensure it's setup correctly. This flow pulls the JSON file from Google Drive and extracts the JSON data and then passes it into the qdrant collection. ",
+        "height": 820,
+        "width": 1380,
+        "color": 7
+      },
+      "id": "1afc0518-b13f-4f76-a608-80a758b4d913",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        1648
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "![n8n](https://uploads.n8n.io/templates/n8n.png)\n## Talk to your Vector Store\nNow that your vector store has been updated with the embedded data, \nyou can use the n8n chat interface to talk to your data using OpenAI, \nOllama, or any of our supported LLMs.",
+        "height": 680,
+        "width": 1380,
+        "color": 7
+      },
+      "id": "3fb4e431-874b-4b41-8366-132f929296f5",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        928
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "![Servicenow](https://uploads.n8n.io/templates/zendesk.png)\n## Deploy your Vector Store\nThis flow adds contextual information to your tickets using the Mitre Attack framework to help contextualize the ticket data.",
+        "height": 900,
+        "width": 2140,
+        "color": 7
+      },
+      "id": "ee1200f4-0422-4629-b8e5-672e73892ce2",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        0
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"ttp_identification\": {\n    \"alert_summary\": \"The alert indicates a check-in from the NetSupport RAT, a known Remote Access Trojan, suggesting command and control (C2) communication.\",\n    \"mitre_attack_ttps\": [\n      {\n        \"tactic\": \"Command and Control\",\n        \"technique\": \"Protocol or Service Impersonation\",\n        \"technique_id\": \"T1001.003\",\n        \"description\": \"The RAT's check-in over port 443 implies potential masquerading of its traffic as legitimate SSL/TLS traffic, a tactic often used to blend C2 communications with normal web traffic.\",\n        \"reference\": \"https://attack.mitre.org/techniques/T1001/003/\"\n      }\n    ]\n  },\n  \"remediation_steps\": {\n    \"network_segmentation\": {\n      \"action\": \"Isolate the affected host\",\n      \"target\": \"0.0.0.0\",\n      \"reason\": \"Prevents further C2 communication or lateral movement.\"\n    },\n    \"endpoint_inspection\": {\n      \"action\": \"Perform a thorough inspection\",\n      \"target\": \"Impacted endpoint\",\n      \"method\": \"Use endpoint detection and response (EDR) tools to check for additional persistence mechanisms.\"\n    },\n    \"network_traffic_analysis\": {\n      \"action\": \"Investigate and block unusual traffic\",\n      \"target\": \"IP 0.0.0.0\",\n      \"method\": \"Implement blocks for the IP across the firewall or IDS/IPS systems.\"\n    },\n    \"system_patching\": {\n      \"action\": \"Ensure all systems are updated\",\n      \"method\": \"Apply the latest security patches to mitigate vulnerabilities exploited by RAT malware.\"\n    },\n    \"ioc_hunting\": {\n      \"action\": \"Search for Indicators of Compromise (IoCs)\",\n      \"method\": \"Check for NetSupport RAT IoCs across other endpoints within the network.\"\n    }\n  },\n  \"historical_patterns\": {\n    \"network_anomalies\": \"Past alerts involving similar attempts to use standard web ports (e.g., 80, 443) for non-standard applications could suggest a broader attempt to blend malicious traffic into legitimate streams.\",\n    \"persistence_tactics\": \"Any detection of anomalies in task scheduling or shortcut modifications may indicate persistence methods similar to those used by RATs.\"\n  },\n  \"external_resources\": [\n    {\n      \"title\": \"ESET Report on Okrum and Ketrican\",\n      \"description\": \"Discusses similar tactics involving protocol impersonation and C2.\",\n      \"url\": \"https://www.eset.com/int/about/newsroom/research/okrum-ketrican/\"\n    },\n    {\n      \"title\": \"Malleable C2 Profiles\",\n      \"description\": \"Document on crafting custom C2 traffic profiles similar to the targeting methods used by NetSupport RAT.\",\n      \"url\": \"https://www.cobaltstrike.com/help-malleable-c2\"\n    },\n    {\n      \"title\": \"MITRE ATT&CK Technique Overview\",\n      \"description\": \"Overview of Protocol or Service Impersonation tactics.\",\n      \"url\": \"https://attack.mitre.org/techniques/T1001/003/\"\n    }\n  ]\n}\n"
+      },
+      "id": "dc858a95-09e9-4a89-b987-dc56d9779619",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "position": [
+        1472,
+        544
+      ],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "1oWBLO5AlIqbgo9mKD1hNtx92HdC6O28d",
+          "cachedResultUrl": "https://drive.google.com/YOUR_AWS_SECRET_KEY_HERE/view?usp=drivesdk",
+          "cachedResultName": "cleaned_mitre_attack_data.json"
+        },
+        "options": {}
+      },
+      "id": "062cc6b2-a38c-4dc7-a381-44b5323c20c9",
+      "name": "Pull Mitre Data From Gdrive",
+      "type": "n8n-nodes-base.googleDrive",
+      "position": [
+        320,
+        1920
+      ],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "qdrantCollection": {
+          "__rl": true,
+          "mode": "id",
+          "value": "mitre"
+        },
+        "options": {}
+      },
+      "id": "7d3613f7-e12e-4f92-85ed-268f0e00efd1",
+      "name": "Embed JSON in Qdrant Collection",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "position": [
+        944,
+        1920
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolName": "mitre_attack_vector_store",
+        "toolDescription": "The mitre_attack_vector_store is a knowledge base trained on the MITRE ATT&CK framework. It is designed to help identify, correlate, and provide context for cybersecurity incidents based on textual descriptions of alerts, events, or behaviors. This tool leverages precomputed embeddings of attack techniques, tactics, and procedures (TTPs) to map user queries (such as SIEM-generated alerts or JIRA ticket titles) to relevant MITRE ATT&CK techniques.\n\nBy analyzing input text, the vector store can:\n\nRetrieve the most relevant MITRE ATT&CK entries (e.g., techniques, tactics, descriptions, external references).\nProvide structured context about potential adversary behaviors.\nSuggest remediation actions or detection methods based on the input.",
+        "qdrantCollection": {
+          "__rl": true,
+          "mode": "list",
+          "value": "mitre",
+          "cachedResultName": "mitre"
+        },
+        "options": {}
+      },
+      "id": "d51a6494-c2b8-48cc-a787-f2ff31e597c1",
+      "name": "Query Qdrant Vector Store",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "position": [
+        992,
+        1280
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolName": "mitre_attack_vector_store",
+        "toolDescription": "The mitre_attack_vector_store is a knowledge base trained on the MITRE ATT&CK framework. It is designed to help identify, correlate, and provide context for cybersecurity incidents based on textual descriptions of alerts, events, or behaviors. This tool leverages precomputed embeddings of attack techniques, tactics, and procedures (TTPs) to map user queries (such as SIEM-generated alerts or JIRA ticket titles) to relevant MITRE ATT&CK techniques.\n\nBy analyzing input text, the vector store can:\n\nRetrieve the most relevant MITRE ATT&CK entries (e.g., techniques, tactics, descriptions, external references).\nProvide structured context about potential adversary behaviors.\nSuggest remediation actions or detection methods based on the input.",
+        "qdrantCollection": {
+          "__rl": true,
+          "mode": "list",
+          "value": "mitre",
+          "cachedResultName": "mitre"
+        },
+        "options": {}
+      },
+      "id": "255ca0b1-8575-4177-a2d5-ade13646778b",
+      "name": "Qdrant Vector Store query",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "position": [
+        1152,
+        512
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "options": {}
+      },
+      "id": "a52f4a20-08b2-4dc1-bf59-0cc413644ad1",
+      "name": "Get all Zendesk Tickets",
+      "type": "n8n-nodes-base.zendesk",
+      "position": [
+        288,
+        272
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "id": "={{ $('Loop Over Items').item.json.id }}",
+        "updateFields": {
+          "customFieldsUi": {
+            "customFieldsValues": [
+              {
+                "id": 34479547176212,
+                "value": "={{ $json.output.ttp_identification.mitre_attack_ttps[0].technique_id }}"
+              },
+              {
+                "id": 34479570659732,
+                "value": "={{ $json.output.ttp_identification.mitre_attack_ttps[0].tactic }}"
+              }
+            ]
+          },
+          "internalNote": "=Summary: {{ $json.output.ttp_identification.alert_summary }}\n\n"
+        }
+      },
+      "id": "90c44dbf-9af8-4d8e-9500-13c7e7030004",
+      "name": "Update Zendesk with Mitre Data",
+      "type": "n8n-nodes-base.zendesk",
+      "position": [
+        1472,
+        352
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {},
+      "id": "4b2ed73c-1a27-4156-86ee-9b357874618a",
+      "name": "Move on to next ticket",
+      "type": "n8n-nodes-base.noOp",
+      "position": [
+        1824,
+        624
+      ],
+      "typeVersion": 1
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Update Zendesk with Mitre Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Embed JSON in Qdrant Collection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token Splitter1": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Default Data Loader",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Qdrant Vector Store query",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI1": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Embed JSON in Qdrant Collection",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI2": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Query Qdrant Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Embed JSON in Qdrant Collection",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Buffer Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move on to next ticket": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get all Zendesk Tickets": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qdrant Vector Store query": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Qdrant Vector Store": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pull Mitre Data From Gdrive": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Zendesk with Mitre Data": {
+      "main": [
+        [
+          {
+            "node": "Move on to next ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Test workflow’": {
+      "main": [
+        [
+          {
+            "node": "Pull Mitre Data From Gdrive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "ed2d9acc-7391-4f6e-882b-27fbc4887eb7",
+  "meta": {
+    "instanceId": "d73c7df2dab3dc6daade1ece2f47b854bd0ded40ecf58169066132c9293df425"
+  },
+  "id": "lYJ7nNDgCsbVPHaf",
+  "tags": []
+}

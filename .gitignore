@@ -1,0 +1,22 @@
+# Secrets file — contains API keys, VM passwords, DFIR-Iris admin password
+SOC-Automation-Project.md
+
+# Obsidian local config (per-machine, no need to share)
+vault/.obsidian/
+vault/.trash/
+
+# Local environment files (when we eventually migrate secrets here)
+.env
+.env.local
+*.env
+
+# Splunk MCP runtime artifacts
+splunk-mcp-main/**/__pycache__/
+splunk-mcp-main/**/.venv/
+splunk-mcp-main/**/uv.lock
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/

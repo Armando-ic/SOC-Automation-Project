@@ -1,0 +1,15 @@
+# Log
+
+Append-only chronological record of meaningful actions in this project. One line per entry. Backfilled entries are marked.
+
+---
+
+2026-04-27 [backfilled] — Splunk Universal Forwarder configured on Windows 10 VM; Splunk receiving Windows event logs at index `mydfir-project`
+2026-04-27 [backfilled] — n8n SOC triage workflow built per video tutorial; AbuseIPDB + VirusTotal + DFIR-Iris + Slack wired to Claude Opus 4.7 via Anthropic node
+2026-04-27 [backfilled] — DFIR-Iris stood up at https://192.168.129.133
+2026-04-27 [backfilled] — Splunk MCP installed in Claude Desktop per video tutorial; tested with multi-day investigation queries
+2026-04-27 [backfilled] — Splunk MCP mirrored to Claude Code (VS Code) at local scope; see [[runbooks/splunk-mcp-setup]] and [[decisions/0004-mirror-mcp-to-claude-code]]
+2026-04-27 — `SOC-Automation-Project.md` added to `.gitignore` (contained Claude API key, VirusTotal key, DFIR-Iris admin password, VM passwords)
+2026-04-27 — Vault initialized at `vault/`; see [[decisions/0001-vault-structure]]
+2026-04-27 — Brainstorm opened for Sub-project A1 (Structured Outputs); see [[subprojects/2026-04-27-structured-outputs/README]]
+2026-04-27 — Brainstorm completed for A1; spec written and self-reviewed at [[subprojects/2026-04-27-structured-outputs/spec]]; awaiting user approval before writing implementation plan

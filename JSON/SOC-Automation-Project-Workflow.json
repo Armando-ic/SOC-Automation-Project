@@ -1,0 +1,319 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "d587bbe6-da1e-4edb-87a6-3d50ad4046b0",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -48,
+        -32
+      ],
+      "id": "f58d0c74-cb4a-423f-9a36-e0b5624bf6dc",
+      "name": "Webhook",
+      "webhookId": "d587bbe6-da1e-4edb-87a6-3d50ad4046b0"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "claude-opus-4-7",
+          "mode": "list",
+          "cachedResultName": "claude-opus-4-7"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "Act as a Tier 1 SOC analyst assistant. When provided with a security alert or incident details (including indicators of compromise, logs, or metadata), perform the following steps: \n\nSummarize the alert – Provide a clear summary of what triggered the alert, which systems/users are affected, and the nature of the activity (e.g., suspicious login, malware detection, lateral movement). \n\nEnrich with threat intelligence – Correlate any IOCs (IP addresses, domains, hashes) with known threat intel sources. Use the AbuseIPDB-Request tool. Highlight if the indicators are associated with known malware or threat actors. For any files hashes use the tool named \"VirusTotal - Hash\" and use the URL: https://www.virustotal.com/api/v3/files/{id} but replace the 'id' in the URL with an actual file hash.\n\nAssess severity – Based on MITRE ATT&CK mapping, identify tactics/techniques, and provide an initial severity rating (Low, Medium, High, Critical). \n\nRecommend next actions – Suggest consice and detailed investigation steps and potential containment actions.\n\nFormat output clearly – Return findings in a structured format (Summary, IOC Enrichment, Severity Assessment, Recommended Actions).",
+              "role": "=assistant"
+            },
+            {
+              "content": "=Alert: {{ $json.body.search_name }}\nAlert Details:{{ JSON.stringify($json.body.result,user, ComputerName,2)}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.anthropic",
+      "typeVersion": 1,
+      "position": [
+        160,
+        -32
+      ],
+      "id": "565db303-eb22-4550-bbc1-2b44401aecba",
+      "name": "Message a model",
+      "credentials": {
+        "anthropicApi": {
+          "id": "VozkiMP8QqbykLLj",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0B0QMQU8QG",
+          "mode": "list",
+          "cachedResultName": "alerts"
+        },
+        "text": "={{ $json.content[0].text }}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        592,
+        -32
+      ],
+      "id": "ac105126-a206-4a52-9648-7b6a8be9c75b",
+      "name": "Send a message",
+      "webhookId": "e4d8ee6c-1c59-4798-8f72-954fadbcf335",
+      "credentials": {
+        "slackApi": {
+          "id": "IWEqjD1DvRajiKXy",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://api.abuseipdb.com/api/v2/check",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "ipAddress",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters0_Value', ``, 'string') }}"
+            },
+            {
+              "name": "maxAgeInDays",
+              "value": "90"
+            },
+            {
+              "name": "verbose"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Key",
+              "value": "REDACTED_BEFORE_COMMIT_SEE_SECRETS_FILE"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        128,
+        112
+      ],
+      "id": "20c75a97-8800-47a4-b7d7-6f1252a2d135",
+      "name": "AbuseIPDB-Enrichment"
+    },
+    {
+      "parameters": {
+        "url": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('URL', ``, 'string') }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "virusTotalApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        288,
+        112
+      ],
+      "id": "ff73832f-32f7-4273-8d0c-57d5eb618e8f",
+      "name": "VirusTotal - Hash",
+      "credentials": {
+        "virusTotalApi": {
+          "id": "MPJtvrtzx8nfI5Ot",
+          "name": "VirusTotal account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "curlImport": "",
+        "httpVariantWarning": "",
+        "method": "POST",
+        "url": "https://192.168.129.133/alerts/add",
+        "": "",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "dfirIrisApi",
+        "provideSslCertificates": false,
+        "sendQuery": false,
+        "sendHeaders": false,
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "alert_title",
+              "value": "={{ $('Webhook').item.json.body.search_name }}"
+            },
+            {
+              "name": "alert_description",
+              "value": "={{ $json.content[0].text }}"
+            },
+            {
+              "name": "alert_severity_id",
+              "value": "3"
+            },
+            {
+              "name": "alert_status_id",
+              "value": "1"
+            },
+            {
+              "name": "alert_customer_id",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        },
+        "infoMessage": ""
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        544,
+        -240
+      ],
+      "id": "f03d710e-1da9-4156-8e69-1597539ceb19",
+      "name": "DFIR-IRIS HTTP Request",
+      "extendsCredential": "dfirIrisApi",
+      "credentials": {
+        "dfirIrisApi": {
+          "id": "rwvgiJMaHqI9hCC9",
+          "name": "DFIR-IRIS account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "accept-encoding": "identity",
+            "content-length": "406",
+            "host": "192.168.129.132:5678",
+            "content-type": "application/json",
+            "user-agent": "Splunk/4332A759-798B-47A9-A66F-FE8B7BC12D5D",
+            "connection": "close"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "sid": "scheduler__mydfir__search__RMD5264e6c2b0a258cb2_at_1777162500_1",
+            "search_name": "Test-Brute-Force",
+            "app": "search",
+            "owner": "mydfir",
+            "results_link": "http://mydfir-splunk:8000/app/search/@go?sid=scheduler__mydfir__search__RMD5264e6c2b0a258cb2_at_1777162500_1",
+            "result": {
+              "_time": "1777162287.929",
+              "ComputerName": "DESKTOP-VNEF7PC",
+              "user": "mydfir",
+              "src_ip": "192.168.129.1",
+              "count": "1"
+            }
+          },
+          "webhookUrl": "http://192.168.129.132:5678/webhook-test/d587bbe6-da1e-4edb-87a6-3d50ad4046b0",
+          "executionMode": "test"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "DFIR-IRIS HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AbuseIPDB-Enrichment": {
+      "ai_tool": [
+        [
+          {
+            "node": "Message a model",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VirusTotal - Hash": {
+      "ai_tool": [
+        [
+          {
+            "node": "Message a model",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "c153e6fb-9659-4fbb-9955-c173e9ea7d7c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d73c7df2dab3dc6daade1ece2f47b854bd0ded40ecf58169066132c9293df425"
+  },
+  "id": "45gQjuH2MFQYrlEx",
+  "tags": []
+}
