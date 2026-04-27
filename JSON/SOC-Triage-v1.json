@@ -83,37 +83,6 @@
     },
     {
       "parameters": {
-        "url": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('URL', ``, 'string') }}",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "virusTotalApi",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "accept",
-              "value": "application/json"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequestTool",
-      "typeVersion": 4.4,
-      "position": [
-        336,
-        128
-      ],
-      "id": "b37eda65-b4c9-4988-88ce-7ddb920066d8",
-      "name": "VirusTotal - Hash",
-      "credentials": {
-        "virusTotalApi": {
-          "id": "MPJtvrtzx8nfI5Ot",
-          "name": "VirusTotal account"
-        }
-      }
-    },
-    {
-      "parameters": {
         "curlImport": "",
         "httpVariantWarning": "",
         "method": "POST",
@@ -219,6 +188,38 @@
           "name": "AbuseIPDB account"
         }
       }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Look up a file hash (MD5, SHA-1, or SHA-256) in VirusTotal to check antivirus engine verdicts. Returns malicious/suspicious counts and identified threat names. Use for any file hash present in the alert.",
+        "url": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('URL', ``, 'string') }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "virusTotalApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        336,
+        128
+      ],
+      "id": "b37eda65-b4c9-4988-88ce-7ddb920066d8",
+      "name": "lookup_file_hash_virustotal",
+      "credentials": {
+        "virusTotalApi": {
+          "id": "MPJtvrtzx8nfI5Ot",
+          "name": "VirusTotal account"
+        }
+      }
     }
   ],
   "pinData": {
@@ -286,7 +287,7 @@
         ]
       ]
     },
-    "VirusTotal - Hash": {
+    "enrich_ip_abuseipdb": {
       "ai_tool": [
         [
           {
@@ -297,7 +298,7 @@
         ]
       ]
     },
-    "enrich_ip_abuseipdb": {
+    "lookup_file_hash_virustotal": {
       "ai_tool": [
         [
           {
@@ -315,7 +316,7 @@
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "ce816bf5-33c8-4dd1-95a3-908bf51e2bbf",
+  "versionId": "08ef6168-bc91-4699-baa4-3a7d105ab64a",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "d73c7df2dab3dc6daade1ece2f47b854bd0ded40ecf58169066132c9293df425"
