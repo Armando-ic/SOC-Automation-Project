@@ -26,6 +26,15 @@ Working notes, gotchas, learnings, open questions discovered during build.
 - Root `FORK-NOTES-2026-04-27-mcp-mirror-to-vscode.md` deleted; canonical copy lives at `vault/sources/session-notes/2026-04-27-mcp-mirror-fork.md`.
 - All literal `***REMOVED***` password references redacted from vault files (substituted with pointers to `SOC-Automation-Project.md`).
 
+### Tasks 6.1 + 6.2 — Slack and DFIR-Iris consumer updates
+- **Bug surfaced: `'alert_severity_id': ['Not a valid integer.']` from DFIR-Iris.** Root cause was the body parameter value field for `alert_severity_id` was in **Fixed mode** when expression text was pasted, so the literal string `={{ $json.severity_iris_id }}` was being sent to the API. Fix: toggle each updated body parameter to Expression mode and re-paste *without* the leading `=` (n8n adds it as the mode marker). Affected three params: `alert_title`, `alert_description`, `alert_severity_id`. **Easy to miss — n8n doesn't auto-toggle when you paste an expression-shaped value into a Fixed-mode field.**
+- **Splunk URL hostname issue.** Splunk's webhook payload `results_link` uses the server's hostname `mydfir-splunk` rather than its IP. Host machines without DNS or `/etc/hosts` entry for that name can't resolve it, so the "View in Splunk" link fails. Patched in the `Extract Triage Result` Code node:
+  ```
+  const splunkLink = (webhook.results_link || '').replace('mydfir-splunk', '192.168.129.131');
+  ```
+  **Long-term fix (out of A1 scope):** edit `/opt/splunk/etc/system/local/server.conf` on the Splunk VM to set `serverName = 192.168.129.131` and restart Splunk. That eliminates the need for the in-workflow string replace.
+- **Splunk search-job expiry behavior** (acceptable, not a bug). The `results_link` URL embeds a Search ID that points to a job artifact Splunk garbage-collects after `dispatch_ttl` (default ~1 hour for scheduled searches). After expiry, clicking the link lands on Splunk's "search expired -- rerun?" page. Real-time alerts work directly; old/pinned data always shows expired.
+
 ### Task 4.1 — submit_triage_result + first end-to-end test
 - Code Tool node added with `schemaType: "manual"` (label "Define using JSON Schema") — this is the right path; "Generate From JSON Example" would have made n8n infer a meta-schema from our schema document.
 - **First end-to-end test passed cleanly** with pinned brute-force webhook data (Test 1 from spec):
