@@ -26,6 +26,24 @@ Working notes, gotchas, learnings, open questions discovered during build.
 - Root `FORK-NOTES-2026-04-27-mcp-mirror-to-vscode.md` deleted; canonical copy lives at `vault/sources/session-notes/2026-04-27-mcp-mirror-fork.md`.
 - All literal `***REMOVED***` password references redacted from vault files (substituted with pointers to `SOC-Automation-Project.md`).
 
+### Task 8.1 — Test 1 (internal brute force)
+Run during Task 4.1 (Anthropic isolated) and again during Task 6 (full e2e). Pinned webhook payload: `Test-Brute-Force`, `mydfir`, `192.168.129.1`, count `1`.
+
+| Check | Result |
+|---|---|
+| Code node executed without throwing | ✓ |
+| Severity (within ±1 of expected low/medium) | `low` ✓ |
+| `severity_iris_id` matches mapping (low → 2) | 2 ✓ |
+| AbuseIPDB enrichment skipped for RFC1918 IP | ✓ (`iocs_enriched: []`) |
+| MITRE T1110 (Brute Force) identified | ✓ |
+| Slack message rendered with green badge + sections | ✓ |
+| DFIR-Iris alert created with dynamic severity (not hardcoded 3) | ✓ — alert showed Low, not Medium |
+| Total execution time | ~14.6s |
+
+Notes:
+- Claude's recommended_actions were SOC-analyst quality: tune the detection rule, correlate with 4624/4625 events over 24h, identify the asset behind the source IP. Beyond what the rule itself surfaced.
+- `investigation_notes` field was NOT visible in the captured output — either Claude omitted it (despite being required in schema) or it was below the screenshot's scroll. Code node fallback (`|| '_none_'`) prevents this from breaking anything. Watch in Tests 2 and 3.
+
 ### Tasks 6.1 + 6.2 — Slack and DFIR-Iris consumer updates
 - **Bug surfaced: `'alert_severity_id': ['Not a valid integer.']` from DFIR-Iris.** Root cause was the body parameter value field for `alert_severity_id` was in **Fixed mode** when expression text was pasted, so the literal string `={{ $json.severity_iris_id }}` was being sent to the API. Fix: toggle each updated body parameter to Expression mode and re-paste *without* the leading `=` (n8n adds it as the mode marker). Affected three params: `alert_title`, `alert_description`, `alert_severity_id`. **Easy to miss — n8n doesn't auto-toggle when you paste an expression-shaped value into a Fixed-mode field.**
 - **Splunk URL hostname issue.** Splunk's webhook payload `results_link` uses the server's hostname `mydfir-splunk` rather than its IP. Host machines without DNS or `/etc/hosts` entry for that name can't resolve it, so the "View in Splunk" link fails. Patched in the `Extract Triage Result` Code node:
