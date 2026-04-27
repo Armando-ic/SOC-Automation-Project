@@ -60,7 +60,7 @@
           "mode": "list",
           "cachedResultName": "alerts"
         },
-        "text": "={{ $json.content[0].text }}",
+        "text": "={{ $json.slack_message }}",
         "otherOptions": {}
       },
       "type": "n8n-nodes-base.slack",
@@ -98,15 +98,15 @@
           "parameters": [
             {
               "name": "alert_title",
-              "value": "={{ $('Webhook').item.json.body.search_name }}"
+              "value": "={{ $json.alert_name }}"
             },
             {
               "name": "alert_description",
-              "value": "={{ $json.content[0].text }}"
+              "value": "={{ $json.iris_description }}"
             },
             {
               "name": "alert_severity_id",
-              "value": "3"
+              "value": "={{ $json.severity_iris_id }}"
             },
             {
               "name": "alert_status_id",
@@ -238,7 +238,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Pull the structured triage result out of Claude's tool call\nconst content = $input.first().json.content || [];\nconst toolCall = content.find(\n  c => c.type === 'tool_use' && c.name === 'submit_triage_result'\n);\n\nif (!toolCall) {\n  throw new Error(\n    `Expected submit_triage_result tool call but got: ${JSON.stringify(content)}`\n  );\n}\n\nconst r = toolCall.input;\n\n// Severity -> Iris ID mapping + emoji for Slack\nconst sevId    = { low: 2, medium: 3, high: 4, critical: 5 }[r.severity] || 3;\nconst sevEmoji = { low: '🟢', medium: '🟡', high: '🟠', critical: '🔴' }[r.severity] || '⚪';\n\n// Pre-render the displayable lists once\nconst mitre = (r.mitre_techniques || [])\n  .map(t => `${t.id} (${t.name})`)\n  .join(', ') || 'none identified';\n\nconst enriched = (r.iocs_enriched || [])\n  .map(i => `- \\`${i.value}\\` -- ${i.verdict.toUpperCase()} (${i.source}): ${i.summary}`)\n  .join('\\n') || '_none_';\n\nconst actions = (r.recommended_actions || [])\n  .map(a => `- [${a.priority.toUpperCase()}] ${a.description}`)\n  .join('\\n') || '_none_';\n\n// Webhook context for the link-back\nconst webhook    = $('Webhook').first().json.body;\nconst alertName  = webhook.search_name;\nconst splunkLink = webhook.results_link;\n\n// Pre-formatted strings for downstream nodes\nconst slack_message = `${sevEmoji} *${r.severity.toUpperCase()}* -- ${alertName}\n\n${r.alert_summary}\n\n*Severity Rationale:* ${r.severity_rationale}\n*MITRE:* ${mitre}\n\n*Enriched IOCs:*\n${enriched}\n\n*Recommended Actions:*\n${actions}\n\n<${splunkLink}|View in Splunk>`;\n\nconst iris_description = `**Summary:** ${r.alert_summary}\n\n**Severity:** ${r.severity} -- ${r.severity_rationale}\n\n**MITRE Techniques:** ${mitre}\n\n**Enriched IOCs:**\n${enriched}\n\n**Recommended Actions:**\n${actions}\n\n**Investigation Notes:**\n${r.investigation_notes || '_none_'}\n\n---\n[View in Splunk](${splunkLink})`;\n\nreturn [{\n  json: {\n    ...r,\n    severity_iris_id: sevId,\n    slack_message,\n    iris_description,\n    splunk_link: splunkLink,\n    alert_name: alertName,\n  }\n}];\n"
+        "jsCode": "// Pull the structured triage result out of Claude's tool call\nconst content = $input.first().json.content || [];\nconst toolCall = content.find(\n  c => c.type === 'tool_use' && c.name === 'submit_triage_result'\n);\n\nif (!toolCall) {\n  throw new Error(\n    `Expected submit_triage_result tool call but got: ${JSON.stringify(content)}`\n  );\n}\n\nconst r = toolCall.input;\n\n// Severity -> Iris ID mapping + emoji for Slack\nconst sevId    = { low: 2, medium: 3, high: 4, critical: 5 }[r.severity] || 3;\nconst sevEmoji = { low: '🟢', medium: '🟡', high: '🟠', critical: '🔴' }[r.severity] || '⚪';\n\n// Pre-render the displayable lists once\nconst mitre = (r.mitre_techniques || [])\n  .map(t => `${t.id} (${t.name})`)\n  .join(', ') || 'none identified';\n\nconst enriched = (r.iocs_enriched || [])\n  .map(i => `- \\`${i.value}\\` -- ${i.verdict.toUpperCase()} (${i.source}): ${i.summary}`)\n  .join('\\n') || '_none_';\n\nconst actions = (r.recommended_actions || [])\n  .map(a => `- [${a.priority.toUpperCase()}] ${a.description}`)\n  .join('\\n') || '_none_';\n\n// Webhook context for the link-back\nconst webhook    = $('Webhook').first().json.body;\nconst alertName  = webhook.search_name;\nconst splunkLink = (webhook.results_link || '').replace('mydfir-splunk', '192.168.129.131');\n\n// Pre-formatted strings for downstream nodes\nconst slack_message = `${sevEmoji} *${r.severity.toUpperCase()}* -- ${alertName}\n\n${r.alert_summary}\n\n*Severity Rationale:* ${r.severity_rationale}\n*MITRE:* ${mitre}\n\n*Enriched IOCs:*\n${enriched}\n\n*Recommended Actions:*\n${actions}\n\n<${splunkLink}|View in Splunk>`;\n\nconst iris_description = `**Summary:** ${r.alert_summary}\n\n**Severity:** ${r.severity} -- ${r.severity_rationale}\n\n**MITRE Techniques:** ${mitre}\n\n**Enriched IOCs:**\n${enriched}\n\n**Recommended Actions:**\n${actions}\n\n**Investigation Notes:**\n${r.investigation_notes || '_none_'}\n\n---\n[View in Splunk](${splunkLink})`;\n\nreturn [{\n  json: {\n    ...r,\n    severity_iris_id: sevId,\n    slack_message,\n    iris_description,\n    splunk_link: splunkLink,\n    alert_name: alertName,\n  }\n}];\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -434,7 +434,7 @@
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "0a96c4cd-9cfd-43b6-94c4-1e505dcfb386",
+  "versionId": "7f8f26ac-5bd0-4dc0-a7fb-c8db2c706712",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "d73c7df2dab3dc6daade1ece2f47b854bd0ded40ecf58169066132c9293df425"
