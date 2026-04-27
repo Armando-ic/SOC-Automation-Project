@@ -26,6 +26,19 @@ Working notes, gotchas, learnings, open questions discovered during build.
 - Root `FORK-NOTES-2026-04-27-mcp-mirror-to-vscode.md` deleted; canonical copy lives at `vault/sources/session-notes/2026-04-27-mcp-mirror-fork.md`.
 - All literal `***REMOVED***` password references redacted from vault files (substituted with pointers to `SOC-Automation-Project.md`).
 
+### Task 4.1 — submit_triage_result + first end-to-end test
+- Code Tool node added with `schemaType: "manual"` (label "Define using JSON Schema") — this is the right path; "Generate From JSON Example" would have made n8n infer a meta-schema from our schema document.
+- **First end-to-end test passed cleanly** with pinned brute-force webhook data (Test 1 from spec):
+  - Execution time: 14.65s
+  - Claude emitted a `text` block first (thinking out loud), then called `submit_triage_result` ✓
+  - Severity assessed as `low` with self-aware rationale (correctly noted that count=1 + internal IP + rule named "Test-Brute-Force" suggests a tuning issue rather than real attack)
+  - RFC1918 enrichment skip rule respected — `iocs_enriched` returned empty
+  - MITRE T1110 Brute Force / Credential Access correctly identified
+  - All four required IOC categories populated (or empty arrays where appropriate)
+  - Recommended actions were SOC-analyst-quality: tune the detection rule, correlate with 4624/4625 over 24h, identify asset for the source IP
+- Output pinned in n8n for downstream development.
+- **Open question:** `investigation_notes` may have been omitted by Claude despite being required in the schema. Could indicate n8n's manual-mode JSON Schema is informational rather than strictly enforced by the Anthropic API call. Code node in Task 5.1 has `|| '_none_'` fallback. Watch in subsequent tests; if persistent, tighten the prompt.
+
 ### Tasks 3.1 + 3.2 — System prompt + user message
 - **n8n quirk discovered:** the `@n8n/n8n-nodes-langchain.anthropic` node does NOT accept `system` as a role in the messages array. It correctly mirrors the Anthropic API by exposing `system` as a separate parameter — found under **Add Option → System Message** in the node's Options section, stored at `parameters.options.system` in the exported JSON. The original MyDFIR tutorial's `role=assistant` approach was always a hack working around this.
 - **Encoding gotcha:** copy-pasting Unicode chars (`→`, `—`, smart quotes) through Windows clipboard can introduce mojibake (`â†'`, `â€"`) in the saved JSON. Use ASCII equivalents (`->`, `--`, straight `'`) when pasting into n8n text fields.
