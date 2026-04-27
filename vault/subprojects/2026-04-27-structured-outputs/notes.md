@@ -26,6 +26,11 @@ Working notes, gotchas, learnings, open questions discovered during build.
 - Root `FORK-NOTES-2026-04-27-mcp-mirror-to-vscode.md` deleted; canonical copy lives at `vault/sources/session-notes/2026-04-27-mcp-mirror-fork.md`.
 - All literal `***REMOVED***` password references redacted from vault files (substituted with pointers to `SOC-Automation-Project.md`).
 
+### Tasks 3.1 + 3.2 — System prompt + user message
+- **n8n quirk discovered:** the `@n8n/n8n-nodes-langchain.anthropic` node does NOT accept `system` as a role in the messages array. It correctly mirrors the Anthropic API by exposing `system` as a separate parameter — found under **Add Option → System Message** in the node's Options section, stored at `parameters.options.system` in the exported JSON. The original MyDFIR tutorial's `role=assistant` approach was always a hack working around this.
+- **Encoding gotcha:** copy-pasting Unicode chars (`→`, `—`, smart quotes) through Windows clipboard can introduce mojibake (`â†'`, `â€"`) in the saved JSON. Use ASCII equivalents (`->`, `--`, straight `'`) when pasting into n8n text fields.
+- **Expression-mode double-`=` gotcha:** when the n8n field is in Expression mode, n8n adds a leading `=` as the mode marker. If the pasted content also starts with `=`, the actual sent value is `==...`. Either paste without the leading `=`, or toggle to Fixed and back.
+
 ### Task 1.1 — AbuseIPDB credential
 - Created n8n credential `AbuseIPDB account` (Header Auth type).
   - Header name: `Key`
