@@ -44,6 +44,8 @@
       ],
       "id": "7a864ded-5d6b-4f99-bb11-39e1be1a57dd",
       "name": "Message a model",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
       "credentials": {
         "anthropicApi": {
           "id": "VozkiMP8QqbykLLj",
@@ -432,9 +434,14 @@
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate",
-    "availableInMCP": false
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": 120
   },
-  "versionId": "7f8f26ac-5bd0-4dc0-a7fb-c8db2c706712",
+  "versionId": "87d2fa64-7640-4bbf-b2df-d3c051750d3a",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "d73c7df2dab3dc6daade1ece2f47b854bd0ded40ecf58169066132c9293df425"
