@@ -28,15 +28,13 @@
         "messages": {
           "values": [
             {
-              "content": "Act as a Tier 1 SOC analyst assistant. When provided with a security alert or incident details (including indicators of compromise, logs, or metadata), perform the following steps: \n\nSummarize the alert – Provide a clear summary of what triggered the alert, which systems/users are affected, and the nature of the activity (e.g., suspicious login, malware detection, lateral movement). \n\nEnrich with threat intelligence – Correlate any IOCs (IP addresses, domains, hashes) with known threat intel sources. Use the AbuseIPDB-Request tool. Highlight if the indicators are associated with known malware or threat actors. For any files hashes use the tool named \"VirusTotal - Hash\" and use the URL: https://www.virustotal.com/api/v3/files/{id} but replace the 'id' in the URL with an actual file hash.\n\nAssess severity – Based on MITRE ATT&CK mapping, identify tactics/techniques, and provide an initial severity rating (Low, Medium, High, Critical). \n\nRecommend next actions – Suggest consice and detailed investigation steps and potential containment actions.\n\nFormat output clearly – Return findings in a structured format (Summary, IOC Enrichment, Severity Assessment, Recommended Actions).",
-              "role": "=assistant"
-            },
-            {
-              "content": "=Alert: {{ $json.body.search_name }}\nAlert Details:{{ JSON.stringify($json.body.result,user, ComputerName,2)}}"
+              "content": "=Splunk alert fired.\n\nAlert Name: {{ $json.body.search_name }}\nSplunk Link: {{ $json.body.results_link }}\n\nEvent Data:\n{{ JSON.stringify($json.body.result, null, 2) }}"
             }
           ]
         },
-        "options": {}
+        "options": {
+          "system": "You are a Tier 1 SOC analyst processing alerts from Splunk. Your job is to triage each alert and submit a structured analysis.  \n\nWorkflow: \n1. Read the alert details provided in the user message.\n2. For each IOC in the alert, decide whether enrichment would help:    \n- Public IPs - call enrich_ip_abuseipdb    \n- File hashes - call lookup_file_hash_virustotal    \n- Skip enrichment for RFC1918 private IPs (10.x, 172.16-31.x, 192.168.x) and obvious internal hostnames -- they return no useful data. \n3. Once enrichment is complete (or you've decided no enrichment is needed), call submit_triage_result EXACTLY ONCE to deliver your findings.  \n\nRules: \n- You MUST call submit_triage_result. It is the only valid way to respond. Do not return free text after the tool call. \n- Pick one severity (low/medium/high/critical). Use severity_rationale to express nuance or uncertainty. \n- For mitre_techniques, only include techniques you can directly justify from the alert data. Do not speculate. \n- iocs lists must contain every distinct IOC observed, deduplicated. iocs_enriched contains only the subset that was actually looked up. \n- recommended_actions should be specific and imperative (\"Disable user X pending investigation\" -- not \"Consider disabling user X\"). Three to five actions is typical; more dilutes signal. \n- investigation_notes is for nuance you cannot fit into structured fields -- alternative hypotheses, missing data, MITRE rationale.  \n\nSeverity calibration: \n- low: routine, expected behavior, or false positive likely \n- medium: deserves analyst attention but not page-worthy \n- high: active threat indicators present, escalate within working hours \n- critical: page on-call immediately, suspected active compromise"
+        }
       },
       "type": "@n8n/n8n-nodes-langchain.anthropic",
       "typeVersion": 1,
@@ -177,8 +175,8 @@
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.4,
       "position": [
-        128,
-        112
+        -48,
+        160
       ],
       "id": "3f4c9d53-eb3e-4e96-b631-d24937b03d1b",
       "name": "enrich_ip_abuseipdb",
@@ -209,8 +207,8 @@
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.4,
       "position": [
-        336,
-        128
+        144,
+        256
       ],
       "id": "b37eda65-b4c9-4988-88ce-7ddb920066d8",
       "name": "lookup_file_hash_virustotal",
@@ -316,7 +314,7 @@
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "08ef6168-bc91-4699-baa4-3a7d105ab64a",
+  "versionId": "27fdd15c-f7f7-403d-b965-860953cf0c50",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "d73c7df2dab3dc6daade1ece2f47b854bd0ded40ecf58169066132c9293df425"
