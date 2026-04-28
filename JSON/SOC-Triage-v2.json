@@ -1,0 +1,347 @@
+{
+  "name": "SOC Triage v2",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "db7245f7-8451-4bea-b47d-f6ad35b818cd",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -48,
+        -32
+      ],
+      "id": "0a36b634-8b05-4527-8249-12792250176f",
+      "name": "Webhook",
+      "webhookId": "db7245f7-8451-4bea-b47d-f6ad35b818cd"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "claude-opus-4-7",
+          "mode": "list",
+          "cachedResultName": "claude-opus-4-7"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Splunk alert fired.\n\nAlert Name: {{ $json.body.search_name }}\nSplunk Link: {{ $json.body.results_link }}\n\nEvent Data:\n{{ JSON.stringify($json.body.result, null, 2) }}"
+            }
+          ]
+        },
+        "options": {
+          "system": "You are a Tier 1 SOC analyst processing alerts from Splunk. Your job is to triage each alert and submit a structured analysis.  \n\nWorkflow: \n1. Read the alert details provided in the user message.\n2. For each IOC in the alert, decide whether enrichment would help:    \n- Public IPs - call enrich_ip_abuseipdb    \n- File hashes - call lookup_file_hash_virustotal    \n- Skip enrichment for RFC1918 private IPs (10.x, 172.16-31.x, 192.168.x) and obvious internal hostnames -- they return no useful data. \n3. Once enrichment is complete (or you've decided no enrichment is needed), call submit_triage_result EXACTLY ONCE to deliver your findings.  \n\nRules: \n- You MUST call submit_triage_result. It is the only valid way to respond. Do not return free text after the tool call. \n- Pick one severity (low/medium/high/critical). Use severity_rationale to express nuance or uncertainty. \n- For mitre_techniques, only include techniques you can directly justify from the alert data. Do not speculate. \n- iocs lists must contain every distinct IOC observed, deduplicated. iocs_enriched contains only the subset that was actually looked up. \n- recommended_actions should be specific and imperative (\"Disable user X pending investigation\" -- not \"Consider disabling user X\"). Three to five actions is typical; more dilutes signal. \n- investigation_notes is for nuance you cannot fit into structured fields -- alternative hypotheses, missing data, MITRE rationale.  \n\nSeverity calibration: \n- low: routine, expected behavior, or false positive likely \n- medium: deserves analyst attention but not page-worthy \n- high: active threat indicators present, escalate within working hours \n- critical: page on-call immediately, suspected active compromise"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.anthropic",
+      "typeVersion": 1,
+      "position": [
+        160,
+        -32
+      ],
+      "id": "c2672b33-42c9-4445-a84f-091f147099b3",
+      "name": "Message a model",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "anthropicApi": {
+          "id": "VozkiMP8QqbykLLj",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0B0QMQU8QG",
+          "mode": "list",
+          "cachedResultName": "alerts"
+        },
+        "text": "={{ $json.slack_message }}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        768,
+        64
+      ],
+      "id": "597a6547-4669-438d-a786-2ce9c2fac339",
+      "name": "Send a message",
+      "webhookId": "aa559e52-6606-4497-893d-cf53b7b1149f",
+      "credentials": {
+        "slackApi": {
+          "id": "IWEqjD1DvRajiKXy",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "curlImport": "",
+        "httpVariantWarning": "",
+        "method": "POST",
+        "url": "https://192.168.129.133/alerts/add",
+        "": "",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "dfirIrisApi",
+        "provideSslCertificates": false,
+        "sendQuery": false,
+        "sendHeaders": false,
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "alert_title",
+              "value": "={{ $json.alert_name }}"
+            },
+            {
+              "name": "alert_description",
+              "value": "={{ $json.iris_description }}"
+            },
+            {
+              "name": "alert_severity_id",
+              "value": "={{ $json.severity_iris_id }}"
+            },
+            {
+              "name": "alert_status_id",
+              "value": "1"
+            },
+            {
+              "name": "alert_customer_id",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        },
+        "infoMessage": ""
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        768,
+        -176
+      ],
+      "id": "1bf38ff3-9822-4d83-a3a8-b878f9316838",
+      "name": "DFIR-IRIS HTTP Request",
+      "extendsCredential": "dfirIrisApi",
+      "credentials": {
+        "dfirIrisApi": {
+          "id": "rwvgiJMaHqI9hCC9",
+          "name": "DFIR-IRIS account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Look up an IP address in AbuseIPDB to check if it has been reported for malicious activity. Returns abuse confidence score, country, ISP, and recent report counts. Use for any external/public IP encountered in the alert. Skip for RFC1918 private IPs (10.x, 172.16-31.x, 192.168.x) — they return no useful data.\n",
+        "url": "https://api.abuseipdb.com/api/v2/check",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "ipAddress",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters0_Value', ``, 'string') }}"
+            },
+            {
+              "name": "maxAgeInDays",
+              "value": "90"
+            },
+            {
+              "name": "verbose"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        -48,
+        160
+      ],
+      "id": "04fa7282-28d1-489c-b4e1-af39b6ec3c4f",
+      "name": "enrich_ip_abuseipdb",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Y4WuoJifIcStqSTi",
+          "name": "AbuseIPDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Look up a file hash (MD5, SHA-1, or SHA-256) in VirusTotal to check antivirus engine verdicts. Returns malicious/suspicious counts and identified threat names.\n\nWhen calling this tool, the URL parameter MUST be the full VirusTotal API URL with the hash substituted at the end. Format: https://www.virustotal.com/api/v3/files/<HASH>\n\nFor example, for hash 44d88612fea8a8f36de82e1278abb02f, call this tool with URL exactly equal to \"https://www.virustotal.com/api/v3/files/44d88612fea8a8f36de82e1278abb02f\"",
+        "url": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('URL', ``, 'string') }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "virusTotalApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        144,
+        256
+      ],
+      "id": "b673e894-5809-469c-82f2-38056bc04061",
+      "name": "lookup_file_hash_virustotal",
+      "credentials": {
+        "virusTotalApi": {
+          "id": "MPJtvrtzx8nfI5Ot",
+          "name": "VirusTotal account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Submit your final SOC triage analysis. You MUST call this tool exactly once at the end of your investigation to deliver your structured findings. Do not respond with text after calling this tool. The structured fields you provide populate downstream Slack alerts, DFIR-Iris tickets, and future automation actions.",
+        "jsCode": "return {\n  success: true,\n  message: \"Triage analysis received. Workflow will route to downstream consumers.\"\n};",
+        "specifyInputSchema": true,
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"required\": [\n    \"schema_version\", \"alert_summary\", \"severity\", \"severity_rationale\",\n    \"mitre_techniques\", \"iocs\", \"iocs_enriched\", \"recommended_actions\",\n    \"investigation_notes\"\n  ],\n  \"properties\": {\n    \"schema_version\": { \"type\": \"string\", \"enum\": [\"v1\"] },\n    \"alert_summary\": { \"type\": \"string\" },\n    \"severity\": { \"type\": \"string\", \"enum\": [\"low\", \"medium\", \"high\", \"critical\"] },\n    \"severity_rationale\": { \"type\": \"string\" },\n    \"mitre_techniques\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\"id\", \"name\", \"tactic\"],\n        \"properties\": {\n          \"id\": { \"type\": \"string\" },\n          \"name\": { \"type\": \"string\" },\n          \"tactic\": { \"type\": \"string\" }\n        }\n      }\n    },\n    \"iocs\": {\n      \"type\": \"object\",\n      \"required\": [\"ips\", \"domains\", \"file_hashes\", \"users\", \"hosts\"],\n      \"properties\": {\n        \"ips\": { \"type\": \"array\", \"items\": { \"type\": \"string\" } },\n        \"domains\": { \"type\": \"array\", \"items\": { \"type\": \"string\" } },\n        \"file_hashes\": { \"type\": \"array\", \"items\": { \"type\": \"string\" } },\n        \"users\": { \"type\": \"array\", \"items\": { \"type\": \"string\" } },\n        \"hosts\": { \"type\": \"array\", \"items\": { \"type\": \"string\" } }\n      }\n    },\n    \"iocs_enriched\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\"value\", \"verdict\", \"source\", \"summary\"],\n        \"properties\": {\n          \"value\": { \"type\": \"string\" },\n          \"verdict\": { \"type\": \"string\", \"enum\": [\"malicious\", \"suspicious\", \"clean\", \"unknown\"] },\n          \"source\": { \"type\": \"string\" },\n          \"summary\": { \"type\": \"string\" }\n        }\n      }\n    },\n    \"recommended_actions\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"required\": [\"description\", \"priority\"],\n        \"properties\": {\n          \"description\": { \"type\": \"string\" },\n          \"priority\": { \"type\": \"string\", \"enum\": [\"low\", \"medium\", \"high\", \"critical\"] }\n        }\n      }\n    },\n    \"investigation_notes\": { \"type\": \"string\" }\n  }\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        368,
+        224
+      ],
+      "id": "6273b502-0dda-4455-a516-978b2cc72b1a",
+      "name": "submit_triage_result"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pull the structured triage result out of Claude's tool call\nconst content = $input.first().json.content || [];\nconst toolCall = content.find(\n  c => c.type === 'tool_use' && c.name === 'submit_triage_result'\n);\n\nif (!toolCall) {\n  throw new Error(\n    `Expected submit_triage_result tool call but got: ${JSON.stringify(content)}`\n  );\n}\n\nconst r = toolCall.input;\n\n// Severity -> Iris ID mapping + emoji for Slack\nconst sevId    = { low: 2, medium: 3, high: 4, critical: 5 }[r.severity] || 3;\nconst sevEmoji = { low: '🟢', medium: '🟡', high: '🟠', critical: '🔴' }[r.severity] || '⚪';\n\n// Pre-render the displayable lists once\nconst mitre = (r.mitre_techniques || [])\n  .map(t => `${t.id} (${t.name})`)\n  .join(', ') || 'none identified';\n\nconst enriched = (r.iocs_enriched || [])\n  .map(i => `- \\`${i.value}\\` -- ${i.verdict.toUpperCase()} (${i.source}): ${i.summary}`)\n  .join('\\n') || '_none_';\n\nconst actions = (r.recommended_actions || [])\n  .map(a => `- [${a.priority.toUpperCase()}] ${a.description}`)\n  .join('\\n') || '_none_';\n\n// Webhook context for the link-back\nconst webhook    = $('Webhook').first().json.body;\nconst alertName  = webhook.search_name;\nconst splunkLink = (webhook.results_link || '').replace('mydfir-splunk', '192.168.129.131');\n\n// Pre-formatted strings for downstream nodes\nconst slack_message = `${sevEmoji} *${r.severity.toUpperCase()}* -- ${alertName}\n\n${r.alert_summary}\n\n*Severity Rationale:* ${r.severity_rationale}\n*MITRE:* ${mitre}\n\n*Enriched IOCs:*\n${enriched}\n\n*Recommended Actions:*\n${actions}\n\n<${splunkLink}|View in Splunk>`;\n\nconst iris_description = `**Summary:** ${r.alert_summary}\n\n**Severity:** ${r.severity} -- ${r.severity_rationale}\n\n**MITRE Techniques:** ${mitre}\n\n**Enriched IOCs:**\n${enriched}\n\n**Recommended Actions:**\n${actions}\n\n**Investigation Notes:**\n${r.investigation_notes || '_none_'}\n\n---\n[View in Splunk](${splunkLink})`;\n\nreturn [{\n  json: {\n    ...r,\n    severity_iris_id: sevId,\n    slack_message,\n    iris_description,\n    splunk_link: splunkLink,\n    alert_name: alertName,\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        -32
+      ],
+      "id": "b3e1823f-216e-4d28-8deb-4dd7fdb29c8e",
+      "name": "Extract Triage Result"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Extract Triage Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "enrich_ip_abuseipdb": {
+      "ai_tool": [
+        [
+          {
+            "node": "Message a model",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "lookup_file_hash_virustotal": {
+      "ai_tool": [
+        [
+          {
+            "node": "Message a model",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "submit_triage_result": {
+      "ai_tool": [
+        [
+          {
+            "node": "Message a model",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Triage Result": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "DFIR-IRIS HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": 120
+  },
+  "versionId": "49856556-3d56-45bc-acd2-942821200832",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d73c7df2dab3dc6daade1ece2f47b854bd0ded40ecf58169066132c9293df425"
+  },
+  "id": "rSsyjOxvzNSqqpGz",
+  "tags": []
+}
