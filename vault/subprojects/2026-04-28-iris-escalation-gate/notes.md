@@ -42,6 +42,24 @@ n8n Slack node v??? exposes Block Kit at:
 
 ---
 
+## 2026-04-28 (impl) — Phase 3 Code node test
+
+Plan Task 3.2 — smoke-test the new `Extract Triage Result` body with Test 2 (external IP / `185.220.101.42` / count=47) pinned data.
+
+- All A1 fields preserved: yes (severity, severity_iris_id, slack_message, iris_description, splunk_link, alert_name, iocs, iocs_enriched, mitre_techniques; `recommended_actions` and `investigation_notes` correctly fall back to `_none_` in rendered strings — Claude omitted both, A1's known pattern)
+- `alert_iocs` populated for external-IP test: yes, count = 1
+- `alert_iocs[0].ioc_type_id`: 79 — correct live `ip-src` ID from Phase 0.1 (not the stale 76 placeholder from spec)
+- `alert_iocs[0].ioc_tlp_id`: 2 (TLP:Amber); `ioc_tags`: `soc-automation,a2`; `ioc_description`: `AbuseIPDB: <summary>` (source/summary concat)
+- `alert_iocs_summary` rendered correctly: yes — `• \`185.220.101.42\` (ip)`
+- `iris_description` ends in raw `Splunk: <url>` (no markdown link): yes — A1 limitation fixed in passing
+- `slack_message` retains Slack mrkdwn link `<url|View in Splunk>` (correct — Slack renders this; only Iris gets the raw URL)
+
+Phase 2 changes also confirmed live in this run: Claude's `iocs_enriched[0].ioc_type` = `"ip"` (system prompt addendum took; schema enum accepted).
+
+**State note:** v2 had no pin data when this session started — n8n's pin data did not carry over from the v1→v2 duplicate (Phase 1.2). Re-established Webhook + `Message a model` pins via one fresh end-to-end of those two nodes (Iris/Slack downstream of Extract did not fire). Pin data now lives in n8n's DB; will be captured in JSON at the next Task that exports v2 (Task 4.1).
+
+---
+
 ## 2026-04-28
 
 - Brainstorm completed; design approved across 7 sections (summary/goal/scope/approach, topology, IOC selection + payload, Iris HTTP calls, Slack message + URL buttons, Wait/Resume + branching, error handling/testing/success criteria).
