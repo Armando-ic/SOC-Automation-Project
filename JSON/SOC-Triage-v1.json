@@ -252,40 +252,7 @@
       "name": "Extract Triage Result"
     }
   ],
-  "pinData": {
-    "Webhook": [
-      {
-        "json": {
-          "headers": {
-            "accept-encoding": "identity",
-            "content-length": "406",
-            "host": "192.168.129.132:5678",
-            "content-type": "application/json",
-            "user-agent": "Splunk/4332A759-798B-47A9-A66F-FE8B7BC12D5D",
-            "connection": "close"
-          },
-          "params": {},
-          "query": {},
-          "body": {
-            "sid": "scheduler__mydfir__search__suspicious_hash__1777162500_3",
-            "search_name": "Suspicious-File-Hash",
-            "app": "search",
-            "owner": "mydfir",
-            "results_link": "http://mydfir-splunk:8000/app/search/@go?sid=scheduler__mydfir__search__suspicious_hash__1777162500_3",
-            "result": {
-              "_time": "1777162287.929",
-              "ComputerName": "DESKTOP-VNEF7PC",
-              "user": "mydfir",
-              "file_hash": "44d88612fea8a8f36de82e1278abb02f",
-              "file_path": "C:\\Users\\mydfir\\Downloads\\eicar.exe"
-            }
-          },
-          "webhookUrl": "http://192.168.129.132:5678/webhook-test/d587bbe6-da1e-4edb-87a6-3d50ad4046b0",
-          "executionMode": "test"
-        }
-      }
-    ]
-  },
+  "pinData": {},
   "connections": {
     "Webhook": {
       "main": [
@@ -370,7 +337,7 @@
     "callerPolicy": "workflowsFromSameOwner",
     "executionTimeout": 120
   },
-  "versionId": "1738e28b-e1bc-41a0-858f-ae7ffe3c6148",
+  "versionId": "f6f69c05-be3c-4312-b3cd-cc3f62dcf8a8",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "d73c7df2dab3dc6daade1ece2f47b854bd0ded40ecf58169066132c9293df425"

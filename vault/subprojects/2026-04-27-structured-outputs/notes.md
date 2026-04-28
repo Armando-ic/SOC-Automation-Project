@@ -26,6 +26,19 @@ Working notes, gotchas, learnings, open questions discovered during build.
 - Root `FORK-NOTES-2026-04-27-mcp-mirror-to-vscode.md` deleted; canonical copy lives at `vault/sources/session-notes/2026-04-27-mcp-mirror-fork.md`.
 - All literal `***REMOVED***` password references redacted from vault files (substituted with pointers to `SOC-Automation-Project.md`).
 
+### Task 9.2 — End-to-end with real Splunk — 2026-04-28
+Cutover verified live. Splunk's `Test-Brute-Force` saved search fired, called the production webhook URL of `SOC Triage v1`, and the alert flowed all the way through Anthropic → Extract Triage Result → both Slack and DFIR-Iris.
+
+**Three n8n version quirks discovered in this task:**
+
+1. **"Active/Inactive" toggle renamed to "Publish/Unpublish"** in newer n8n (v2.17.7 self-hosted). The `Publish` button in the dropdown is functionally equivalent to `Activate`. The exported JSON still carries `active: true|false`.
+2. **Webhook node "Test URL / Production URL" toggle is purely a display preference** — it shows you which URL to copy. It does NOT change which URL listens. n8n always defaults the display back to "Test URL" on reopen; this is normal and not a bug.
+3. **Stale "Credentials are not set" warnings persist on nodes after credential reattachment** even when execution succeeds. UI cosmetic; doesn't reflect runtime state.
+
+**Limitation surfaced:** the `View in Splunk` link in the DFIR-Iris alert description renders as literal markdown text `[View in Splunk](http://...)` instead of a clickable link. DFIR-Iris's alert description field doesn't render markdown links. Slack does (it uses its own `<url|text>` format). One-line fix for a future sub-project: emit the raw URL in `iris_description` instead of markdown link syntax.
+
+**Splunk saved search disabled after verification** — confirmed by user. No risk of cron firing alerts every minute.
+
 ### Task 8.3 — Test 3 (EICAR file hash) — 2026-04-28
 Pinned EICAR hash `44d88612fea8a8f36de82e1278abb02f` with file_path `C:\Users\mydfir\Downloads\eicar.exe`.
 

@@ -43,12 +43,14 @@ Convert the current n8n triage workflow's freeform AI output into a structured J
 ## Status
 
 - [x] Brainstorm completed 2026-04-27
-- [x] Spec written 2026-04-27 (awaiting user review)
-- [ ] Spec approved
-- [ ] Implementation plan written
-- [ ] Implementation executed
-- [ ] Runbook written
-- [ ] Verification: workflow run end-to-end with real test alert, structured output observed in DFIR-Iris and Slack
+- [x] Spec written 2026-04-27
+- [x] Spec approved 2026-04-27
+- [x] Implementation plan written 2026-04-27
+- [x] Implementation executed 2026-04-27 / 2026-04-28
+- [x] Runbook written 2026-04-28
+- [x] Verification: end-to-end with real Splunk alert succeeded; severity dynamic across 3 test cases (low → high → low-by-judgment); structured output observed in both DFIR-Iris and Slack
+
+**A1 complete 2026-04-28.** See [[runbook]] for ongoing operations and [[notes]] for the full record of issues hit and decisions made along the way.
 
 ## Predecessors
 

@@ -20,3 +20,6 @@ splunk-mcp-main/**/uv.lock
 Thumbs.db
 *.swp
 .vscode/
+
+# Claude Code session metadata
+.claude/
