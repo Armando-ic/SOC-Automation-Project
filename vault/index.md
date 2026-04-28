@@ -25,7 +25,8 @@ Catalog of every page in this vault, organized by category. Updated whenever a n
 
 ## Sub-projects
 
-- [[subprojects/2026-04-27-structured-outputs/README]] — A1: Structured Outputs (active)
+- [[subprojects/2026-04-27-structured-outputs/README]] — A1: Structured Outputs (complete)
+- [[subprojects/2026-04-28-iris-escalation-gate/README]] — A2: Iris Escalation Gate (active — spec written, awaiting plan)
 
 ## Decisions (ADRs)
 

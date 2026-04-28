@@ -58,4 +58,4 @@ None — this is the first sub-project after the original tutorial work.
 
 ## Successors
 
-- A2 (Response Actions) depends on this sub-project's structured output schema, specifically the `severity` field and the `recommended_actions` array.
+- [[../2026-04-28-iris-escalation-gate/README]] — **A2: Iris Escalation Gate** (active 2026-04-28). Reads A1's `iocs_enriched` field (filtered to malicious/suspicious) to drive a Slack-gated alert→case escalation in DFIR-Iris. Adds an additive schema field `ioc_type` to each `iocs_enriched` item; `severity` and `recommended_actions` remain unchanged (the latter is reserved for A3+).
