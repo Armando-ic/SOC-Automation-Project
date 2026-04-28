@@ -39,7 +39,7 @@
       "type": "@n8n/n8n-nodes-langchain.anthropic",
       "typeVersion": 1,
       "position": [
-        160,
+        176,
         -32
       ],
       "id": "c2672b33-42c9-4445-a84f-091f147099b3",
@@ -62,14 +62,14 @@
           "mode": "list",
           "cachedResultName": "alerts"
         },
-        "text": "={{ $json.slack_message }}",
+        "text": "={{ $('Extract Triage Result').item.json.slack_message }}\n",
         "otherOptions": {}
       },
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.4,
       "position": [
-        768,
-        64
+        1072,
+        -224
       ],
       "id": "597a6547-4669-438d-a786-2ce9c2fac339",
       "name": "Send a message",
@@ -185,7 +185,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        480,
+        528,
         -32
       ],
       "id": "b3e1823f-216e-4d28-8deb-4dd7fdb29c8e",
@@ -243,7 +243,7 @@
       "typeVersion": 4.4,
       "position": [
         768,
-        -176
+        -224
       ],
       "id": "1bf38ff3-9822-4d83-a3a8-b878f9316838",
       "name": "Create Iris Alert",
@@ -416,12 +416,18 @@
       "main": [
         [
           {
-            "node": "Send a message",
+            "node": "Create Iris Alert",
             "type": "main",
             "index": 0
-          },
+          }
+        ]
+      ]
+    },
+    "Create Iris Alert": {
+      "main": [
+        [
           {
-            "node": "Create Iris Alert",
+            "node": "Send a message",
             "type": "main",
             "index": 0
           }
@@ -440,7 +446,7 @@
     "callerPolicy": "workflowsFromSameOwner",
     "executionTimeout": 120
   },
-  "versionId": "7c859683-3a42-461f-a00b-f86f92b23f45",
+  "versionId": "c927647a-6865-4103-9a48-c4b320c52a96",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "d73c7df2dab3dc6daade1ece2f47b854bd0ded40ecf58169066132c9293df425"

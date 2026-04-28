@@ -113,6 +113,24 @@ The pre-fix alert #12 in Iris is left in place as a historical artifact (no need
 
 ---
 
+## 2026-04-28 (impl) — Phase 5.1 cross-graph expression gotcha
+
+When rewiring `Send a message` from a direct child of `Extract Triage Result` to a downstream child of `Create Iris Alert`, the original expression `{{ $json.slack_message }}` started rendering as the literal string `"undefined"` in Slack. Cause: `$json` resolves to the *immediate* upstream node's output. Once Iris was inserted in the chain, `$json` became Iris's response — which has no `slack_message` field.
+
+Fix: change to the cross-graph reference form:
+
+```
+{{ $('Extract Triage Result').item.json.slack_message }}
+```
+
+This pattern reaches a specific named upstream node regardless of intermediate nodes. We'll use it again in Task 5.3 (Block Kit Slack node) and Phase 8 (thread reply nodes).
+
+**Generalized rule for the runbook:** when n8n nodes consume fields from a non-immediate upstream node, always use `$('Source Node').item.json.field`. `$json.field` is a footgun in any non-linear or multi-stage workflow — fine for two-node chains, silently wrong for anything more complex. Same family as A1's "Expression mode auto-prefixes `=`" gotcha — both are n8n syntactic surprises that fail at runtime, not validation time.
+
+The pre-fix Slack post in #alerts (single message, body literal `"undefined"`) is a harmless audit-trail artifact; left in place.
+
+---
+
 ## 2026-04-28
 
 - Brainstorm completed; design approved across 7 sections (summary/goal/scope/approach, topology, IOC selection + payload, Iris HTTP calls, Slack message + URL buttons, Wait/Resume + branching, error handling/testing/success criteria).
