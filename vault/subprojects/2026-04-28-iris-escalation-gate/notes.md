@@ -4,6 +4,33 @@ Working notes, gotchas, learnings, open questions discovered during build.
 
 ---
 
+## 2026-04-28 (impl) — Phase 0 verifications
+
+### Task 0.1 — Iris IOC type IDs captured
+- Live Iris catalog has 160 IOC types; we use 5. Captured IDs:
+  - `ip-src` → 79 (chosen over `ip-dst` 77 — Splunk delivers source IPs)
+  - `domain` → 20
+  - `md5` → 90
+  - `sha1` → 111
+  - `sha256` → 113
+- Documented in [[../../architecture/components/dfir-iris]] under new "IOC type IDs" subsection.
+- **Spec/plan placeholder values were guesses (76/20/90/113/114) and several were wrong.** Real values: 79/20/90/111/113. Plan's Task 3.1 example will need the actual numbers when the Code node body is pasted.
+- **Stale endpoint reference fixed in passing:** the old vault said `/iocs/add`; the actual Iris endpoint is `/case/ioc/add`. Also surfaced that `/alerts/add` accepts `alert_iocs` natively and `/alerts/escalate/{alert_id}` is the case-promotion path A2 uses.
+
+### Task 0.2 — Wait node behavior probe — DEFERRED
+Skipping the standalone probe; will verify `$execution.resumeUrl` resolution + timeout field name inline during Phase 6 (the same execution that wires the Wait node will surface both). Plan's documented fallbacks (manual `$execution.id` URL construction; inspect `$json` shape post-resume) cover both unknowns.
+
+### Task 0.3 — Slack node Block Kit support — CONFIRMED (Branch A)
+n8n Slack node v??? exposes Block Kit at:
+- Click Slack node → **Message Type** dropdown (default `Simple Text Message`) → select **`Blocks`**
+- A **`Blocks`** field appears that accepts raw JSON (Fixed/Expression toggle, Block Kit Builder link inline)
+- Other Message Type options seen: `Simple Text Message`, `Blocks`, `Attachments`
+- Bonus finding: **"Reply to a Message"** under Add Option carries `thread_ts` — exactly what Phase 8 thread replies need (no HTTP Request fallback for replies either)
+
+**Decision for Phase 5+:** use native Slack nodes throughout. No `chat.postMessage` HTTP Request fallback needed.
+
+---
+
 ## 2026-04-28
 
 - Brainstorm completed; design approved across 7 sections (summary/goal/scope/approach, topology, IOC selection + payload, Iris HTTP calls, Slack message + URL buttons, Wait/Resume + branching, error handling/testing/success criteria).
