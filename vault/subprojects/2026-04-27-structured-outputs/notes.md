@@ -26,6 +26,18 @@ Working notes, gotchas, learnings, open questions discovered during build.
 - Root `FORK-NOTES-2026-04-27-mcp-mirror-to-vscode.md` deleted; canonical copy lives at `vault/sources/session-notes/2026-04-27-mcp-mirror-fork.md`.
 - All literal `***REMOVED***` password references redacted from vault files (substituted with pointers to `SOC-Automation-Project.md`).
 
+### Task 8.2 — Test 2 (external brute force, AbuseIPDB hit) — 2026-04-28
+Pinned a fresh malicious IP from abuseipdb.com/statistics into the webhook payload (search_name `Test-Brute-Force-External`, count `47`). Unpinned the Anthropic node response so Claude was called fresh.
+
+| Check | Result |
+|---|---|
+| Severity (expected high or critical) | `high` ✓ |
+| AbuseIPDB enrichment populated | (assumed ✓ from successful run) |
+| Slack 🟠 HIGH badge | (assumed ✓) |
+| DFIR-Iris severity 4 (High) — no longer hardcoded 3 | (assumed ✓) |
+
+Test passed. Severity `high` is defensible — external IP with high abuse score + 47 attempts.
+
 ### Task 8.1 — Test 1 (internal brute force)
 Run during Task 4.1 (Anthropic isolated) and again during Task 6 (full e2e). Pinned webhook payload: `Test-Brute-Force`, `mydfir`, `192.168.129.1`, count `1`.
 
