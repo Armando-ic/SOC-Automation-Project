@@ -60,6 +60,59 @@ Phase 2 changes also confirmed live in this run: Claude's `iocs_enriched[0].ioc_
 
 ---
 
+## 2026-04-28 (impl) — Phase 4 Iris alert response shape + severity bug fix
+
+### Task 4.2 — `Create Iris Alert` live test step
+
+Body now carries `alert_iocs`; "Always Output Data" enabled; isolated Test step against live Iris (192.168.129.133) returned HTTP 200 + `status: "success"`.
+
+Response field paths (verified live, for downstream nodes to reference):
+
+- Alert ID: `data.alert_id` (integer, e.g. `12`, `13` from this session's runs)
+- Alert UUID: `data.alert_uuid` (string)
+- IOC UUIDs: `data.iocs[].ioc_uuid` (array — A2's `Escalate Iris Alert` will pass this as `iocs_import_list`)
+- Per-IOC type round-trip: `data.iocs[].ioc_type.type_name` confirms type_id 79 = `ip-src` exactly as Phase 0.1 captured.
+
+n8n expression for downstream use:
+
+| Need | Expression |
+|---|---|
+| Alert ID | `{{ $('Create Iris Alert').item.json.data.alert_id }}` |
+| IOC UUIDs | `{{ $('Create Iris Alert').item.json.data.iocs.map(i => i.ioc_uuid) }}` |
+
+### Detour — A1 severity-mapping bug discovered and fixed
+
+The first Test 2 alert (`alert_id: 12`) came back with `severity.severity_name: "Low"` despite Claude scoring `"high"`. Confirmed in Iris UI — alert is real, badge says "Low".
+
+Root cause: A1's Code node mapped `{ low: 2, medium: 3, high: 4, critical: 5 }`, assuming linear severity IDs. Live `/manage/severities/list` shows the catalog is **non-linear**:
+
+| `severity_id` | `severity_name` |
+|---|---|
+| 1 | Medium |
+| 2 | Unspecified |
+| 3 | Informational |
+| 4 | Low |
+| 5 | High |
+| 6 | Critical |
+
+A1's mapping silently understated every alert: low→Unspecified, medium→Informational, high→Low, critical→High. Bug never surfaced because A1 didn't capture the alert-creation response (the `alwaysOutputData` toggle A2 just enabled is what made it visible).
+
+Fix landed in the same Code node (one-line change to `sevId` table, with new explanatory comment block):
+
+```js
+const sevId    = { low: 4, medium: 1, high: 5, critical: 6 }[r.severity] || 2;
+```
+
+Catalog documented in [[../../architecture/components/dfir-iris]] under new "Severity IDs" section, alongside the existing IOC type IDs section. Same lesson re-learned: **Iris ID catalogs are non-linear and deployment-specific — always capture from live, never assume.**
+
+Verification after fix: a second Test 2 run produced `alert_id: 13` with `severity.severity_name: "High"` and `alert_severity_id: 5`. Working as intended.
+
+The pre-fix alert #12 in Iris is left in place as a historical artifact (no need to delete; it's harmless and conveniently illustrates what the bug looked like).
+
+**Implication for A1's runbook:** A1 documented `severity_iris_id` as derived from Claude's verdict but never validated round-trip against Iris's catalog. A2's runbook should call out the live-catalog-capture pattern as a required gate.
+
+---
+
 ## 2026-04-28
 
 - Brainstorm completed; design approved across 7 sections (summary/goal/scope/approach, topology, IOC selection + payload, Iris HTTP calls, Slack message + URL buttons, Wait/Resume + branching, error handling/testing/success criteria).

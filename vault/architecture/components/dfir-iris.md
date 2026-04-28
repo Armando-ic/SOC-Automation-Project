@@ -40,7 +40,7 @@ The shipped `docker-compose.base.yaml` has `depends_on` directives that fail und
 |---|---|---|
 | `alert_title` | Splunk search name | Comes from webhook |
 | `alert_description` | AI-generated text | Currently freeform Claude output; becomes structured per A1 |
-| `alert_severity_id` | Hardcoded `3` (Medium) | Should be derived from AI severity assessment in A1 |
+| `alert_severity_id` | Looked up from Claude's `severity` via the catalog table below | A2: corrected from A1's wrong table; see "Severity IDs" section |
 | `alert_status_id` | Hardcoded `1` (New) | Reasonable default |
 | `alert_customer_id` | Hardcoded `1` | Single-tenant lab — fine |
 
@@ -76,4 +76,39 @@ for t in d:
     if t['type_name'] in ('ip-src', 'domain', 'md5', 'sha1', 'sha256'):
         print(t['type_name'], '->', t['type_id'])
 "
+```
+
+## Severity IDs (captured 2026-04-28)
+
+Required by `Extract Triage Result`'s severity-mapping table (`sevId`). **Iris severity IDs are non-linear** — they do not follow severity order. **Re-capture if Iris is upgraded.**
+
+Live catalog from `GET /manage/severities/list`:
+
+| `severity_id` | `severity_name` |
+|---|---|
+| **1** | Medium |
+| **2** | Unspecified |
+| **3** | Informational |
+| **4** | Low |
+| **5** | High |
+| **6** | Critical |
+
+Code node mapping from Claude's `severity` enum:
+
+| Claude `severity` | Iris `severity_id` |
+|---|---|
+| `low`      | 4 |
+| `medium`   | 1 |
+| `high`     | 5 |
+| `critical` | 6 |
+| (fallback for any unrecognized value) | 2 (Unspecified) |
+
+**A1 had this wrong.** A1's table mapped `low→2, medium→3, high→4, critical→5`, which on this Iris instance silently produced Unspecified, Informational, Low, and High respectively — every alert was understated. The bug went undetected because A1 didn't capture the alert-creation response (the toggle A2's `alwaysOutputData` enabled, which surfaced `severity.severity_name` in the response body and made the mismatch visible). Fixed in A2 alongside the Code node rewrite.
+
+To re-capture:
+
+```bash
+curl -ks -H "Authorization: Bearer <iris-api-key>" \
+  https://192.168.129.133/manage/severities/list \
+  | python -m json.tool
 ```
