@@ -131,6 +131,46 @@ The pre-fix Slack post in #alerts (single message, body literal `"undefined"`) i
 
 ---
 
+## 2026-04-28 (impl) — Phase 5.2 IF strict-type-validation gotcha
+
+The IF node's default `typeValidation: "strict"` mode rejects values whose JS type doesn't match the declared comparison type. After adding the `Has Malicious IOCs?` IF with `Number > 0`, executions failed with:
+
+> Wrong type: '1' is a string but was expecting a number [condition 0, item 0]
+
+Root cause: a trailing `\n` (newline) had been left in the leftValue expression field — `={{ $('Extract Triage Result').item.json.alert_iocs.length }}\n`. The newline coerced n8n's numeric result (`1`) to a string (`'1\n'`) via implicit concatenation, which strict mode then rejected.
+
+Fix: strip the trailing whitespace from the leftValue field. Alternative workaround would be toggling "Convert types where required" ON, but that masks the cause; clean expression is preferable.
+
+**Generalized rule for the runbook:** when typing expressions into n8n condition fields, ensure the value ends with `}}` and nothing after. The field's text editor sometimes inserts a newline on Enter — review by clicking back into the field after pasting.
+
+---
+
+## 2026-04-28 (impl) — Phase 5.3 native Slack node Block Kit support is a dead end
+
+Phase 0.3 confirmed n8n Slack node v2.4 *exposes* a Block Kit JSON field via `Message Type: Blocks` → `Blocks` field. Implementation in Phase 5.3 found that the field accepts JSON input (with no error in either Expression or Fixed mode) but **n8n does not actually translate it to a `blocks` field in the outgoing Slack API request**. Slack receives only the `text` parameter and synthesizes a single `rich_text` block as fallback — buttons, dividers, action prompts never appear.
+
+Verified via two test runs:
+1. Real Block Kit JSON with cross-graph expressions and JSON.stringify-wrapped multi-line content (Expression mode): Slack response showed only the text-fallback rich_text block; expected 4 blocks (section + divider + section + actions).
+2. Minimal hardcoded diagnostic — three plain blocks (text section, divider, actions block with one URL button to `http://example.com`) in Fixed mode: same result. No buttons rendered.
+
+Slack API responses for both runs returned `ok: true` with `message.blocks` containing one auto-synthesized `rich_text` block. That confirms n8n is sending text-only requests; it isn't a Slack-side rejection.
+
+This invalidates Phase 0.3's "Branch A confirmed" finding for the actual posting behavior. The Block Kit *configuration UI* exists; the *runtime translation* doesn't work in this version (n8n 2.4 Slack node, typeVersion 2.4 in workflow JSON).
+
+**Decision:** abandon Branch A. Switch to the plan's documented **Branch B fallback**: HTTP Request node calling Slack's `chat.postMessage` API directly. This bypasses n8n's Slack node entirely and lets us send the `blocks` array as part of the explicit JSON body — the same approach we already use for DFIR-Iris.
+
+Implementation steps from here:
+- Replace the `Post Slack Alert + Approve/Deny` Slack node with an HTTP Request node, keeping the same name and IF-true-branch wiring.
+- Use Slack credential reuse via HTTP Request's "Predefined Credential Type → Slack API" option (no need to extract the bot token).
+- Body JSON includes `channel`, `text` (fallback for notifications), and `blocks` (the Block Kit array).
+- Same Block Kit content as the failed Branch A attempt (section, divider, action prompt, two URL buttons), now safely embedded as a structured JSON body.
+
+The four+ Iris alerts already created during Branch A debugging (#13, #14, #15, etc.) plus the Slack messages without buttons all stay as harmless audit-trail artifacts.
+
+**Update Phase 0.3 finding in retrospect:** the "native Slack node + Block Kit" path looked viable based on UI exploration, but only end-to-end implementation surfaced that the field doesn't wire through. Future Phase-0-style verifications for new node types should always include a minimal end-to-end test (post a hardcoded payload, confirm Slack actually receives it as expected) — UI presence ≠ runtime functionality.
+
+---
+
 ## 2026-04-28
 
 - Brainstorm completed; design approved across 7 sections (summary/goal/scope/approach, topology, IOC selection + payload, Iris HTTP calls, Slack message + URL buttons, Wait/Resume + branching, error handling/testing/success criteria).

@@ -10,7 +10,7 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
       "position": [
-        -48,
+        -240,
         -32
       ],
       "id": "0a36b634-8b05-4527-8249-12792250176f",
@@ -39,7 +39,7 @@
       "type": "@n8n/n8n-nodes-langchain.anthropic",
       "typeVersion": 1,
       "position": [
-        176,
+        64,
         -32
       ],
       "id": "c2672b33-42c9-4445-a84f-091f147099b3",
@@ -68,8 +68,8 @@
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.4,
       "position": [
-        1120,
-        192
+        1344,
+        64
       ],
       "id": "597a6547-4669-438d-a786-2ce9c2fac339",
       "name": "Send a message",
@@ -117,8 +117,8 @@
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.4,
       "position": [
-        -48,
-        160
+        -112,
+        112
       ],
       "id": "04fa7282-28d1-489c-b4e1-af39b6ec3c4f",
       "name": "enrich_ip_abuseipdb",
@@ -149,8 +149,8 @@
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.4,
       "position": [
-        144,
-        256
+        -128,
+        304
       ],
       "id": "b673e894-5809-469c-82f2-38056bc04061",
       "name": "lookup_file_hash_virustotal",
@@ -172,8 +172,8 @@
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.3,
       "position": [
-        368,
-        224
+        64,
+        304
       ],
       "id": "6273b502-0dda-4455-a516-978b2cc72b1a",
       "name": "submit_triage_result"
@@ -185,7 +185,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        528,
+        496,
         -32
       ],
       "id": "b3e1823f-216e-4d28-8deb-4dd7fdb29c8e",
@@ -242,8 +242,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        768,
-        -224
+        784,
+        -32
       ],
       "id": "1bf38ff3-9822-4d83-a3a8-b878f9316838",
       "name": "Create Iris Alert",
@@ -268,7 +268,7 @@
           "conditions": [
             {
               "id": "e03e6088-7035-44f2-9326-26eb2e82eae1",
-              "leftValue": "={{ $('Extract Triage Result').item.json.alert_iocs.length }}\n",
+              "leftValue": "={{ $('Extract Triage Result').item.json.alert_iocs.length }}",
               "rightValue": 0,
               "operator": {
                 "type": "number",
@@ -283,11 +283,37 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        848,
-        16
+        1072,
+        -32
       ],
       "id": "57711800-5dd5-49db-9ce5-a33dd92029ad",
       "name": "Has Malicious IOCs?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"channel\": \"C0B0QMQU8QG\",\n  \"text\": \"{{ JSON.stringify($('Extract Triage Result').item.json.slack_message).slice(1, -1) }}\",\n  \"blocks\": [\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"{{ JSON.stringify($('Extract Triage Result').item.json.slack_message).slice(1, -1) }}\"\n      }\n    },\n    { \"type\": \"divider\" },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*ACTION REQUEST: Escalate this alert to a DFIR-Iris case?*\\n\\nThe following IOCs will be promoted to threat intel:\\n{{ JSON.stringify($('Extract Triage Result').item.json.alert_iocs_summary).slice(1, -1) }}\\n\\n_Iris alert: <https://192.168.129.133/alerts?alert_ids={{ $('Create Iris Alert').item.json.data.alert_id }}|#{{ $('Create Iris Alert').item.json.data.alert_id }}>_\"\n      }\n    },\n    {\n      \"type\": \"actions\",\n      \"elements\": [\n        {\n          \"type\": \"button\",\n          \"text\": { \"type\": \"plain_text\", \"text\": \"\\u2705 Approve\" },\n          \"url\": \"http://192.168.129.132:5678/webhook-waiting/{{ $execution.id }}?decision=approve\",\n          \"style\": \"primary\"\n        },\n        {\n          \"type\": \"button\",\n          \"text\": { \"type\": \"plain_text\", \"text\": \"\\u274C Deny\" },\n          \"url\": \"http://192.168.129.132:5678/webhook-waiting/{{ $execution.id }}?decision=deny\",\n          \"style\": \"danger\"\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1344,
+        -112
+      ],
+      "id": "799a4464-8ba1-4b6b-972a-211917dc5fd3",
+      "name": "Post Slack Alert + Approve/Deny",
+      "credentials": {
+        "slackApi": {
+          "id": "IWEqjD1DvRajiKXy",
+          "name": "Slack account"
+        }
+      }
     }
   ],
   "pinData": {
@@ -474,7 +500,13 @@
     },
     "Has Malicious IOCs?": {
       "main": [
-        [],
+        [
+          {
+            "node": "Post Slack Alert + Approve/Deny",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Send a message",
@@ -496,7 +528,7 @@
     "callerPolicy": "workflowsFromSameOwner",
     "executionTimeout": 120
   },
-  "versionId": "40779cab-88c3-4b6f-84b7-8ba52e31294b",
+  "versionId": "1d8aeb09-7a9c-4b5b-aa27-8990e29d2d09",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "d73c7df2dab3dc6daade1ece2f47b854bd0ded40ecf58169066132c9293df425"
