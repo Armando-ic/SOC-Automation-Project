@@ -26,6 +26,30 @@ Working notes, gotchas, learnings, open questions discovered during build.
 - Root `FORK-NOTES-2026-04-27-mcp-mirror-to-vscode.md` deleted; canonical copy lives at `vault/sources/session-notes/2026-04-27-mcp-mirror-fork.md`.
 - All literal `***REMOVED***` password references redacted from vault files (substituted with pointers to `SOC-Automation-Project.md`).
 
+### Task 8.3 — Test 3 (EICAR file hash) — 2026-04-28
+Pinned EICAR hash `44d88612fea8a8f36de82e1278abb02f` with file_path `C:\Users\mydfir\Downloads\eicar.exe`.
+
+**First attempt failed:** `lookup_file_hash_virustotal` rejected with `Invalid URL: 44d88612... URL must start with "http" or "https"`. Root cause: Claude was passing only the hash, not the full VirusTotal API URL. The tool description we set in Task 2.3 didn't tell Claude how to construct the URL — the original tutorial's prompt did this, but I dropped it during the rewrite. Fixed by adding URL template + concrete example to the tool description.
+
+**Second attempt: PASSED with the most impressive result of the three tests.** Claude recognized EICAR by name, not just by hash:
+> "VirusTotal confirms the file as the EICAR test file (66/75 engines flag as EICAR-Test-File). EICAR is an industry-standard, intentionally benign string used to verify AV/EDR detection capability — not an actual threat."
+
+| Check | Result |
+|---|---|
+| Severity | `low` ✓ (correctly justified — EICAR is intentionally benign) |
+| `severity_iris_id` | 2 ✓ |
+| iocs.file_hashes | `["44d88612fea8a8f36de82e1278abb02f"]` ✓ |
+| iocs_enriched verdict | `clean` (Claude's judgment call — detection ≠ malicious for known test artifact; defensible) |
+| iocs_enriched source | `VirusTotal` ✓ |
+| MITRE | T1105 Ingress Tool Transfer (defensible — file got onto the endpoint somehow) |
+| Slack 🟢 LOW badge | ✓ |
+| Splunk link | `http://192.168.129.131:8000/...` (hostname patch worked) ✓ |
+| `investigation_notes` | omitted again — `_none_` fallback used |
+
+Recommended actions Claude generated were senior-analyst-grade — including the non-obvious "verify the endpoint AV actually flagged the EICAR file; if not, investigate why protection failed." That's the kind of metacognition that justifies AI triage over pure rule-based SOAR.
+
+**Pattern observed across tests:** Claude omits `investigation_notes` 2 out of 3 times (Tests 1 and 3 confirmed; Test 2 not captured). Anthropic's tool-use schema enforcement appears to treat `required` fields as advisory rather than blocking. Code node `|| '_none_'` fallback handles this gracefully. Not worth a prompt tightening for A1; revisit if A2 needs this field reliably.
+
 ### Task 8.2 — Test 2 (external brute force, AbuseIPDB hit) — 2026-04-28
 Pinned a fresh malicious IP from abuseipdb.com/statistics into the webhook payload (search_name `Test-Brute-Force-External`, count `47`). Unpinned the Anthropic node response so Claude was called fresh.
 

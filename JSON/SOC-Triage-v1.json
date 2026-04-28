@@ -191,7 +191,7 @@
     },
     {
       "parameters": {
-        "toolDescription": "Look up a file hash (MD5, SHA-1, or SHA-256) in VirusTotal to check antivirus engine verdicts. Returns malicious/suspicious counts and identified threat names. Use for any file hash present in the alert.",
+        "toolDescription": "Look up a file hash (MD5, SHA-1, or SHA-256) in VirusTotal to check antivirus engine verdicts. Returns malicious/suspicious counts and identified threat names.\n\nWhen calling this tool, the URL parameter MUST be the full VirusTotal API URL with the hash substituted at the end. Format: https://www.virustotal.com/api/v3/files/<HASH>\n\nFor example, for hash 44d88612fea8a8f36de82e1278abb02f, call this tool with URL exactly equal to \"https://www.virustotal.com/api/v3/files/44d88612fea8a8f36de82e1278abb02f\"",
         "url": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('URL', ``, 'string') }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "virusTotalApi",
@@ -267,92 +267,21 @@
           "params": {},
           "query": {},
           "body": {
-            "sid": "scheduler__mydfir__search__RMD5264e6c2b0a258cb2_at_1777162500_1",
-            "search_name": "Test-Brute-Force",
+            "sid": "scheduler__mydfir__search__suspicious_hash__1777162500_3",
+            "search_name": "Suspicious-File-Hash",
             "app": "search",
             "owner": "mydfir",
-            "results_link": "http://mydfir-splunk:8000/app/search/@go?sid=scheduler__mydfir__search__RMD5264e6c2b0a258cb2_at_1777162500_1",
+            "results_link": "http://mydfir-splunk:8000/app/search/@go?sid=scheduler__mydfir__search__suspicious_hash__1777162500_3",
             "result": {
               "_time": "1777162287.929",
               "ComputerName": "DESKTOP-VNEF7PC",
               "user": "mydfir",
-              "src_ip": "192.168.129.1",
-              "count": "1"
+              "file_hash": "44d88612fea8a8f36de82e1278abb02f",
+              "file_path": "C:\\Users\\mydfir\\Downloads\\eicar.exe"
             }
           },
           "webhookUrl": "http://192.168.129.132:5678/webhook-test/d587bbe6-da1e-4edb-87a6-3d50ad4046b0",
           "executionMode": "test"
-        },
-        "pairedItem": {
-          "item": 0
-        }
-      }
-    ],
-    "Message a model": [
-      {
-        "json": {
-          "content": [
-            {
-              "type": "text",
-              "text": "I'll triage this brute force alert. The source IP is in the RFC1918 range (192.168.x.x), so I'll skip enrichment per the rules and proceed directly to analysis.\n\nNote: The count is only 1, which is unusual for a \"brute force\" detection — this suggests the alert threshold may be very low or this is a test rule."
-            },
-            {
-              "type": "tool_use",
-              "id": "toolu_01ByaN6M23F2FhVNSVmyhQAU",
-              "name": "submit_triage_result",
-              "input": {
-                "schema_version": "v1",
-                "alert_summary": "Splunk \"Test-Brute-Force\" rule triggered for user 'mydfir' on host DESKTOP-VNEF7PC from internal source IP 192.168.129.1 with an event count of 1. The rule name and minimal count strongly suggest a test/tuning rule rather than a genuine brute-force attempt.",
-                "severity": "low",
-                "severity_rationale": "The detection rule is named \"Test-Brute-Force\", the source IP is RFC1918 internal (192.168.129.1), and the event count is only 1 — none of which are consistent with an actual brute-force attack. This is most likely a test alert or a poorly-tuned detection. Severity could be raised if additional failed-logon volume is observed for user 'mydfir' across other hosts.",
-                "mitre_techniques": [
-                  {
-                    "id": "T1110",
-                    "name": "Brute Force",
-                    "tactic": "Credential Access"
-                  }
-                ],
-                "iocs": {
-                  "ips": [
-                    "192.168.129.1"
-                  ],
-                  "domains": [],
-                  "file_hashes": [],
-                  "users": [
-                    "mydfir"
-                  ],
-                  "hosts": [
-                    "DESKTOP-VNEF7PC"
-                  ]
-                },
-                "iocs_enriched": [],
-                "recommended_actions": [
-                  {
-                    "description": "Confirm with detection engineering whether 'Test-Brute-Force' is an active production rule or a test/tuning rule that should be disabled or filtered from analyst queues.",
-                    "priority": "medium"
-                  },
-                  {
-                    "description": "Pull failed-logon (4625) and successful-logon (4624) events for user 'mydfir' on DESKTOP-VNEF7PC over the last 24 hours to confirm there is no real brute-force pattern.",
-                    "priority": "medium"
-                  },
-                  {
-                    "description": "Identify the asset assigned 192.168.129.1 (likely a host-only/VM gateway given the /24) via DHCP/asset inventory and validate it is an expected source for authentications to DESKTOP-VNEF7PC.",
-                    "priority": "low"
-                  },
-                  {
-                    "description": "Tune the detection threshold — a count of 1 should not fire a brute-force rule. Update the search to require N failed logons within a time window before alerting.",
-                    "priority": "medium"
-                  }
-                ]
-              },
-              "caller": {
-                "type": "direct"
-              }
-            }
-          ]
-        },
-        "pairedItem": {
-          "item": 0
         }
       }
     ]
@@ -441,7 +370,7 @@
     "callerPolicy": "workflowsFromSameOwner",
     "executionTimeout": 120
   },
-  "versionId": "87d2fa64-7640-4bbf-b2df-d3c051750d3a",
+  "versionId": "1738e28b-e1bc-41a0-858f-ae7ffe3c6148",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "d73c7df2dab3dc6daade1ece2f47b854bd0ded40ecf58169066132c9293df425"
