@@ -236,7 +236,12 @@ return [{
 `alert_iocs_summary` is the human-readable list shown in the Slack action prompt:
 
 ```javascript
-const TYPE_NAMES = { /* reverse map of IRIS_IOC_TYPE_IDS for display */ };
+// Reverse map of IRIS_IOC_TYPE_IDS so the Slack prompt can show "ip" / "md5"
+// instead of the integer ID. Build it once from IRIS_IOC_TYPE_IDS.
+const TYPE_NAMES = Object.fromEntries(
+  Object.entries(IRIS_IOC_TYPE_IDS).map(([name, id]) => [id, name])
+);
+
 const alert_iocs_summary = alert_iocs.length > 0
   ? alert_iocs.map(i => `• \`${i.ioc_value}\` (${TYPE_NAMES[i.ioc_type_id] || 'unknown'})`).join('\n')
   : '_none_';
@@ -380,15 +385,16 @@ If `$execution.resumeUrl` doesn't populate in pre-Wait nodes in this n8n version
 
 becomes the `thread_ts` parameter on all four follow-up Slack reply nodes.
 
-#### 5d. Outcome thread replies (one per branch)
+#### 5d. Outcome thread replies (four nodes, one per branch)
+
+The Switch node's `fallback` branch routes to the **same** Deny reply node — fallback isn't a separate Slack node, it's just an extra Switch arrow into Deny. Net Slack node count: 1 alert post + 4 thread replies = 5 Slack nodes.
 
 | Branch | Slack thread reply text |
 |---|---|
 | Approve, escalation succeeded | ✅ *Approved* — Iris case `<https://192.168.129.133/case?cid={case_id}\|#{case_id}>` created with N IOCs imported. |
 | Approve, escalation failed   | ❌ *Approval received but escalation failed:* `<error msg>`. Iris alert `#{alert_id}` remains in the alert queue. Manual escalation required. |
-| Deny                         | ❌ *Denied* — Iris alert `#{alert_id}` remains in the alert queue. No case opened. |
+| Deny *(also catches Switch fallback)* | ❌ *Denied* — Iris alert `#{alert_id}` remains in the alert queue. No case opened. |
 | Timeout                      | ⏱️ *No response in 30 minutes — auto-treated as Deny.* Iris alert `#{alert_id}` remains in the alert queue. |
-| Switch fallback (defensive)  | ⚠️ Unknown decision query — treated as Deny. Iris alert `#{alert_id}` remains in the alert queue. |
 
 #### 5e. Slack credential + channel
 
@@ -444,7 +450,7 @@ Single page (not branched approve/deny variants) keeps configuration simple. The
 | `timeout`  | `{{ $json.timedOut }}` is `true` | → Timeout Slack reply |
 | `approve`  | `{{ $json.query.decision }}` equals `approve` | → Escalate sub-flow |
 | `deny`     | `{{ $json.query.decision }}` equals `deny` | → Deny Slack reply |
-| (fallback) | anything else | → Fallback Slack reply (treated as deny) |
+| (fallback) | anything else (defensive — malformed query) | → Deny Slack reply (same node as `deny`; behavior is identical) |
 
 #### 6d. Approve sub-flow
 
