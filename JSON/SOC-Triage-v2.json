@@ -68,8 +68,8 @@
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.4,
       "position": [
-        1072,
-        -224
+        1120,
+        192
       ],
       "id": "597a6547-4669-438d-a786-2ce9c2fac339",
       "name": "Send a message",
@@ -255,6 +255,39 @@
           "name": "DFIR-IRIS account"
         }
       }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e03e6088-7035-44f2-9326-26eb2e82eae1",
+              "leftValue": "={{ $('Extract Triage Result').item.json.alert_iocs.length }}\n",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        848,
+        16
+      ],
+      "id": "57711800-5dd5-49db-9ce5-a33dd92029ad",
+      "name": "Has Malicious IOCs?"
     }
   ],
   "pinData": {
@@ -427,6 +460,23 @@
       "main": [
         [
           {
+            "node": "Has Malicious IOCs?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        []
+      ]
+    },
+    "Has Malicious IOCs?": {
+      "main": [
+        [],
+        [
+          {
             "node": "Send a message",
             "type": "main",
             "index": 0
@@ -446,7 +496,7 @@
     "callerPolicy": "workflowsFromSameOwner",
     "executionTimeout": 120
   },
-  "versionId": "c927647a-6865-4103-9a48-c4b320c52a96",
+  "versionId": "40779cab-88c3-4b6f-84b7-8ba52e31294b",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "d73c7df2dab3dc6daade1ece2f47b854bd0ded40ecf58169066132c9293df425"
