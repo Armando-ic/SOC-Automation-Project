@@ -20,6 +20,17 @@ Working notes, gotchas, learnings, open questions discovered during build.
 ### Task 0.2 — Wait node behavior probe — DEFERRED
 Skipping the standalone probe; will verify `$execution.resumeUrl` resolution + timeout field name inline during Phase 6 (the same execution that wires the Wait node will surface both). Plan's documented fallbacks (manual `$execution.id` URL construction; inspect `$json` shape post-resume) cover both unknowns.
 
+### Phase 3 Code node — Unicode encoding lesson (rediscovered)
+
+A1 ran into clipboard mojibake with em-dashes and emoji (`â€"` etc.). A2 hit it again on the first paste of the Extract Triage Result body. **Permanent fix:** in the source, use only ASCII — encode all user-visible Unicode via JS escape sequences:
+
+- `'\u{1F7E2}'` for emoji (supplementary plane, brace syntax required)
+- `'⚪'` / `'•'` / `'—'` for BMP chars (no braces)
+
+The working file at `scratch/extract-triage-result-a2.js` (gitignored) is pure ASCII and pastes through any clipboard pathway without mangling. The JS engine resolves escapes at runtime, so Slack/Iris see the real chars.
+
+**Generalized rule for the runbook:** whenever a Code node will display Unicode to humans (Slack, Iris, web), prefer `\u` escapes over raw Unicode literals in the source. ASCII source = clipboard-safe.
+
 ### Task 0.3 — Slack node Block Kit support — CONFIRMED (Branch A)
 n8n Slack node v??? exposes Block Kit at:
 - Click Slack node → **Message Type** dropdown (default `Simple Text Message`) → select **`Blocks`**
