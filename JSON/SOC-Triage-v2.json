@@ -83,66 +83,6 @@
     },
     {
       "parameters": {
-        "curlImport": "",
-        "httpVariantWarning": "",
-        "method": "POST",
-        "url": "https://192.168.129.133/alerts/add",
-        "": "",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "dfirIrisApi",
-        "provideSslCertificates": false,
-        "sendQuery": false,
-        "sendHeaders": false,
-        "sendBody": true,
-        "contentType": "json",
-        "specifyBody": "keypair",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "alert_title",
-              "value": "={{ $json.alert_name }}"
-            },
-            {
-              "name": "alert_description",
-              "value": "={{ $json.iris_description }}"
-            },
-            {
-              "name": "alert_severity_id",
-              "value": "={{ $json.severity_iris_id }}"
-            },
-            {
-              "name": "alert_status_id",
-              "value": "1"
-            },
-            {
-              "name": "alert_customer_id",
-              "value": "1"
-            }
-          ]
-        },
-        "options": {
-          "allowUnauthorizedCerts": true
-        },
-        "infoMessage": ""
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
-      "position": [
-        768,
-        -176
-      ],
-      "id": "1bf38ff3-9822-4d83-a3a8-b878f9316838",
-      "name": "DFIR-IRIS HTTP Request",
-      "extendsCredential": "dfirIrisApi",
-      "credentials": {
-        "dfirIrisApi": {
-          "id": "rwvgiJMaHqI9hCC9",
-          "name": "DFIR-IRIS account"
-        }
-      }
-    },
-    {
-      "parameters": {
         "toolDescription": "Look up an IP address in AbuseIPDB to check if it has been reported for malicious activity. Returns abuse confidence score, country, ISP, and recent report counts. Use for any external/public IP encountered in the alert. Skip for RFC1918 private IPs (10.x, 172.16-31.x, 192.168.x) — they return no useful data.\n",
         "url": "https://api.abuseipdb.com/api/v2/check",
         "authentication": "genericCredentialType",
@@ -250,9 +190,172 @@
       ],
       "id": "b3e1823f-216e-4d28-8deb-4dd7fdb29c8e",
       "name": "Extract Triage Result"
+    },
+    {
+      "parameters": {
+        "curlImport": "",
+        "httpVariantWarning": "",
+        "method": "POST",
+        "url": "https://192.168.129.133/alerts/add",
+        "": "",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "dfirIrisApi",
+        "provideSslCertificates": false,
+        "sendQuery": false,
+        "sendHeaders": false,
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "alert_title",
+              "value": "={{ $json.alert_name }}"
+            },
+            {
+              "name": "alert_description",
+              "value": "={{ $json.iris_description }}"
+            },
+            {
+              "name": "alert_severity_id",
+              "value": "={{ $json.severity_iris_id }}"
+            },
+            {
+              "name": "alert_status_id",
+              "value": "1"
+            },
+            {
+              "name": "alert_customer_id",
+              "value": "1"
+            },
+            {
+              "name": "alert_iocs",
+              "value": "={{ $json.alert_iocs }}"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        },
+        "infoMessage": ""
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        768,
+        -176
+      ],
+      "id": "1bf38ff3-9822-4d83-a3a8-b878f9316838",
+      "name": "Create Iris Alert",
+      "extendsCredential": "dfirIrisApi",
+      "alwaysOutputData": true,
+      "credentials": {
+        "dfirIrisApi": {
+          "id": "rwvgiJMaHqI9hCC9",
+          "name": "DFIR-IRIS account"
+        }
+      }
     }
   ],
-  "pinData": {},
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "192.168.129.132:5678",
+            "user-agent": "curl/8.18.0",
+            "accept": "*/*",
+            "content-type": "application/json",
+            "content-length": "364"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "search_name": "Test-Brute-Force-External",
+            "results_link": "http://mydfir-splunk:8000/app/search/?q=search%20index%3Dwineventlog%20EventCode%3D4625%20src_ip%3D185.220.101.42",
+            "result": {
+              "_time": "1777162287.929",
+              "ComputerName": "DESKTOP-VNEF7PC",
+              "user": "mydfir",
+              "src_ip": "185.220.101.42",
+              "count": "47"
+            }
+          },
+          "webhookUrl": "http://192.168.129.132:5678/webhook-test/db7245f7-8451-4bea-b47d-f6ad35b818cd",
+          "executionMode": "test"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Message a model": [
+      {
+        "json": {
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_01LqNBrNZ55PzoWv9DmheJB4",
+              "name": "submit_triage_result",
+              "input": {
+                "schema_version": "v1",
+                "alert_summary": "External brute-force attempt against host DESKTOP-VNEF7PC: 47 failed Windows logon events (EventCode 4625) targeting user 'mydfir' from public IP 185.220.101.42 (a known Tor exit node).",
+                "severity": "high",
+                "severity_rationale": "Source IP is a confirmed Tor exit node (tor-exit-42.for-privacy.net) with an AbuseIPDB confidence score of 85 and 90 reports across 51 distinct reporters, including SSH brute force, web app attacks, and credential stuffing. 47 failed logons against a single user from an external Tor IP indicates an active, targeted brute-force attempt. Severity is high rather than critical because no successful authentication (4624) is reported in the alert data — escalate to critical immediately if a successful login from this IP is observed.",
+                "mitre_techniques": [
+                  {
+                    "id": "T1110.001",
+                    "name": "Brute Force: Password Guessing",
+                    "tactic": "Credential Access"
+                  },
+                  {
+                    "id": "T1090.003",
+                    "name": "Proxy: Multi-hop Proxy",
+                    "tactic": "Command and Control"
+                  },
+                  {
+                    "id": "T1078",
+                    "name": "Valid Accounts",
+                    "tactic": "Initial Access"
+                  }
+                ],
+                "iocs": {
+                  "ips": [
+                    "185.220.101.42"
+                  ],
+                  "domains": [
+                    "tor-exit-42.for-privacy.net"
+                  ],
+                  "file_hashes": [],
+                  "users": [
+                    "mydfir"
+                  ],
+                  "hosts": [
+                    "DESKTOP-VNEF7PC"
+                  ]
+                },
+                "iocs_enriched": [
+                  {
+                    "value": "185.220.101.42",
+                    "ioc_type": "ip",
+                    "verdict": "malicious",
+                    "source": "AbuseIPDB",
+                    "summary": "Confirmed Tor exit node (for-privacy.net, DE). AbuseIPDB confidence 85/100, 90 reports from 51 distinct users. Repeatedly reported for SSH brute force, web app attacks, credential stuffing, vulnerability scanning, and form spam. Last reported 2026-04-28."
+                  }
+                ]
+              },
+              "caller": {
+                "type": "direct"
+              }
+            }
+          ]
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
   "connections": {
     "Webhook": {
       "main": [
@@ -318,7 +421,7 @@
             "index": 0
           },
           {
-            "node": "DFIR-IRIS HTTP Request",
+            "node": "Create Iris Alert",
             "type": "main",
             "index": 0
           }
@@ -337,7 +440,7 @@
     "callerPolicy": "workflowsFromSameOwner",
     "executionTimeout": 120
   },
-  "versionId": "3e20f9e4-a7d4-4d81-8fed-55ff0d54e382",
+  "versionId": "189e2428-6959-40e9-9e8b-1e153b41518a",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "d73c7df2dab3dc6daade1ece2f47b854bd0ded40ecf58169066132c9293df425"
