@@ -342,6 +342,74 @@
       "id": "51eeb009-d740-459a-b4fd-1e962960e44f",
       "name": "Wait For Decision",
       "webhookId": "d9ebd1fa-b774-4ba2-9350-bd0d10c5c189"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.query?.decision }}",
+                    "rightValue": "approve",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "662794b8-d89a-49c5-9e99-b6d56779ee22"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "approve"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "66110d25-0643-4111-8f14-4db78c93d55d",
+                    "leftValue": "={{ $json.query?.decision }}",
+                    "rightValue": "deny",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "deny"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        1760,
+        -112
+      ],
+      "id": "718e9ee6-2e83-4894-9861-c3597a4e43d8",
+      "name": "Decision?"
     }
   ],
   "pinData": {
@@ -554,6 +622,17 @@
           }
         ]
       ]
+    },
+    "Wait For Decision": {
+      "main": [
+        [
+          {
+            "node": "Decision?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": false,
@@ -567,7 +646,7 @@
     "callerPolicy": "workflowsFromSameOwner",
     "executionTimeout": 120
   },
-  "versionId": "cd14520b-83c3-4b73-8d1a-c58de4364dea",
+  "versionId": "c51504a4-8c62-4631-a6ba-6a7c12558be9",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "d73c7df2dab3dc6daade1ece2f47b854bd0ded40ecf58169066132c9293df425"
