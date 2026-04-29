@@ -171,6 +171,74 @@ The four+ Iris alerts already created during Branch A debugging (#13, #14, #15, 
 
 ---
 
+## 2026-04-29 (impl) — Phase 6 verified + Phase 0.2 answered live
+
+Three concrete findings, one critical, plus Phase 0.2's deferred questions all answered against a real Wait node.
+
+### 1. CRITICAL — n8n Wait webhooks require a signed token
+
+The plan's documented manual fallback URL form `http://192.168.129.132:5678/webhook-waiting/{{ $execution.id }}?decision=...` **does not work** in this n8n version. Hitting that URL returns `{"error": "Invalid token"}`. n8n's Wait node generates resume URLs of the form:
+
+```
+http://192.168.129.132:5678/webhook-waiting/<execution_id>?signature=<token>
+```
+
+The `signature` query parameter is computed from execution data using a server secret — it's unguessable and cannot be reconstructed manually.
+
+**Fix:** Slack button URLs must use `{{ $execution.resumeUrl }}` (which n8n populates with the full signed URL during expression resolution, even in nodes BEFORE the Wait). Append `&decision=approve|deny` (using `&` not `?`, since the URL already has `?signature=...`):
+
+```
+{{ $execution.resumeUrl }}&decision=approve
+{{ $execution.resumeUrl }}&decision=deny
+```
+
+This was committed via the Phase 6 bundle alongside the Wait node addition.
+
+**Side benefit (security):** the original spec accepted "anyone with LAN access + the resume URL can approve" as the threat model. With signed URLs, only someone who already received the Slack message can approve — Slack-mediated authorization for free. A2.5 (signed Slack interactivity) gets a smaller scope as a result.
+
+### 2. Phase 0.2 question 1: `$execution.resumeUrl` resolution timing
+
+Confirmed: **`$execution.resumeUrl` populates correctly in the Slack node, before the Wait node runs.** Resolved value at Slack-post time matched the URL n8n's Wait node listened on. Spec section 5b's open question is closed.
+
+### 3. Phase 0.2 question 2: Wait node timeout-result shape — the surprise
+
+Spec assumed `$json.timedOut === true` would be the timeout indicator. **That field does not exist.** The Wait node has TWO distinct output shapes depending on what triggered the resume:
+
+| Case | Wait node output |
+|---|---|
+| **Click (webhook hit)** | `{ headers, params, query: { signature, decision }, body, webhookUrl, executionMode }` — n8n replaces the item with the resume request's data |
+| **Timeout** | Upstream item passes through **unchanged** (the Slack node's `chat.postMessage` response in our case) — no `timedOut` field, no special marker |
+
+Verified live: timeout execution #71 (Wait time set to 30s for the test) completed in 30.329s; Wait node's OUTPUT panel showed the upstream Slack response object, identical to its INPUT panel.
+
+**Implication for Phase 7's `Decision?` Switch design:** branch on **presence/value of `$json.query.decision`**, not on `$json.timedOut`:
+
+- `$json.query.decision === 'approve'` → escalate sub-flow
+- `$json.query.decision === 'deny'` → deny reply
+- otherwise (undefined when timeout passes through Slack data, or any malformed query) → timeout reply
+
+The original spec section 6c table entries `timeout: $json.timedOut === true` and `(fallback): malformed query → Deny` collapse into a single defensive design where any non-`approve`/non-`deny` value (including undefined-on-timeout) routes to the timeout reply. Cleaner than the spec's three-way + fallback.
+
+### 4. Phase 0.2 question 3: Wait node "Respond Immediately" + custom HTML response — partial
+
+Wait node's **Respond mode = Immediately** is set correctly. The configured `responseData` (HTML page) and `responseHeaders` (Content-Type: text/html) are persisted in the workflow JSON. **However, the response body sent to the analyst's browser is `{"message":"Workflow was started"}`, not our HTML page.** This appears to be a behavior of n8n's Wait node where `responseData`/`responseHeaders` only apply to certain Webhook trigger configurations, not to resume-webhook responses.
+
+**Decision:** defer to a polish task. The functional behavior is fine — workflow resumes correctly; the analyst sees a one-line JSON message for ~1 second before closing the tab; the Slack thread reply (Phase 8) is the authoritative outcome surface. If we later want the pretty page, options are:
+- Add a Respond to Webhook node downstream of Wait (probably) — requires changing Wait's Respond mode to "Use Respond Node"
+- Accept the JSON response as a known limitation
+
+Captured as a `runbook.md`-worthy known limitation when we get to Phase 12.
+
+### 5. Side observation — Slack interactivity warning on URL buttons
+
+Slack shows a small ⚠️ "This app is not configured to handle interactive responses. Please configure interactivity URL for this app under the app config page." warning next to URL buttons. This is benign — Slack flags `actions` block buttons as interactive elements expecting a Slack interactivity webhook, but URL-only clicks (our pattern) work fine without one. The warning can be eliminated by switching to a different block representation (e.g., a section with mrkdwn links instead of a buttons actions block), at the cost of styled buttons. Acceptable for A2; revisit in A2.5.
+
+### 6. Side bookkeeping
+
+The dev-cycle timeout (30 seconds) was reset to 30 minutes (1800 seconds) before exporting v2 JSON. Iris alerts created during Phase 6 testing (#16-#20+) and corresponding Slack posts in #alerts are harmless audit-trail artifacts.
+
+---
+
 ## 2026-04-28
 
 - Brainstorm completed; design approved across 7 sections (summary/goal/scope/approach, topology, IOC selection + payload, Iris HTTP calls, Slack message + URL buttons, Wait/Resume + branching, error handling/testing/success criteria).
