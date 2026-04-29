@@ -279,19 +279,89 @@ While debugging via direct curl, discovered Iris's `/alerts/escalate/{alert_id}`
 
 **Both must be present in the body** (even if empty: `assets_import_list: []`, `case_tags: "anything"`). Our body always includes both, so this isn't a current blocker, but the runbook should call this out: don't trim "optional" fields from the escalate body without testing — Iris's spec/impl mismatch will silently 500.
 
+### Test 3 — Deny path: PASSED
+
+Same Test 2 pinned data (`185.220.101.42` Tor exit, count: 47); only the action differs — clicked ❌ Deny instead of ✅ Approve. Workflow execution at `Apr 29, 16:18:31`, succeeded in ~30s (the 30s reflects analyst click latency, not a timeout — Wait is back at 1800s).
+
+| Check | Result |
+|---|---|
+| Iris alert created | ✓ alert #42 |
+| Slack post with Approve/Deny buttons | ✓ |
+| Wait resumed on Deny click | ✓ |
+| Switch routed to `deny` output (not `approve`/timeout) | ✓ — `Reply: Denied` node fired, which is only reachable via deny |
+| `Escalate Iris Alert` did NOT fire | ✓ |
+| `Build Escalate Body` did NOT fire | ✓ |
+| `Reply: Approved + case` / `Reply: Approved but escalate failed` did NOT fire | ✓ |
+| `Reply: Denied` thread reply posted in Slack | ✓ (visible as "1 reply" on the original alert thread) |
+| **No** new Iris case created from alert #42 | ✓ — alert remains in Iris's alert queue |
+
+Fast test as expected — the deny branch had been informally exercised during Phase 8.3 testing, so this was confirmation of end-to-end behavior with the now-final workflow. No surprises.
+
+### Test 4 — Timeout path: PASSED
+
+Same Test 2 pinned data; Wait timeout temporarily reduced (to ~30s for fast cycle), workflow executed, **no buttons clicked**. Wait fired its timeout, the resume passed the upstream Slack-response object through (matching the Phase 6 finding — no `timedOut` field, just the upstream item), and the `Decision?` Switch routed to **Fallback** (no `query.decision === 'approve'` and no `query.decision === 'deny'`).
+
+| Check | Result |
+|---|---|
+| Iris alert created | ✓ alert #43 |
+| Slack post with Approve/Deny buttons | ✓ |
+| Wait timed out (no click) | ✓ |
+| Switch routed to **Fallback** output (not approve/deny) | ✓ — visible on canvas (1 item out of Fallback, 0 out of approve/deny) |
+| `Build Escalate Body` did NOT fire | ✓ |
+| `Escalate Iris Alert` did NOT fire | ✓ |
+| `Reply: Approved + case` / `Reply: Approved but escalate failed` did NOT fire | ✓ |
+| `Reply: Denied` did NOT fire | ✓ |
+| `Reply: Timeout` thread reply posted in Slack | ✓ (visible as "1 reply" on alert thread; node shows green/1 item on canvas) |
+| **No** new Iris case created from alert #43 | ✓ — alert remains in Iris's alert queue |
+
+Validates the Phase 6 design decision that fallback (not a timed-out flag) is the correct timeout-detection mechanism — `query.decision` is simply undefined when the Wait fires its timeout, and the Switch's catch-all is the natural landing.
+
+### Test 5 — Escalation failure (Iris VM down): PASSED
+
+Negative-path test. Sequencing matters: Iris must be UP at workflow start (so `Create Iris Alert` succeeds and Slack posts the buttons), THEN Iris is killed while the workflow is paused on Wait, THEN Approve is clicked. This is the only way to exercise the post-Approve-but-pre-case-created failure path the runbook needs to document.
+
+Sequence:
+1. Wait timeout reset to 1800s (production value) — also serves as Phase 11 pre-flight ✓
+2. Workflow executed with Iris up → `Create Iris Alert` green → Iris alert **#44** created → Slack post with Approve/Deny buttons → workflow paused on `Wait For Decision`
+3. Iris VM stopped (host: 192.168.129.133)
+4. Iris-down confirmed via curl: `HTTP 000` (connection failed, no response)
+5. ✅ Approve clicked in Slack
+
+Result on canvas:
+
+| Node | State |
+|---|---|
+| `Decision?` Switch | approve output fired (1 item) |
+| `Build Escalate Body` | ✓ green (1 item out — no Iris dependency, JS-only) |
+| `Escalate Iris Alert` | routed via **Error** output (1 item Error, 0 items Success) — Continue On Fail behaved as designed |
+| `Escalation Succeeded?` IF | took the false branch (Error → Reply: Approved but escalate failed) |
+| `Reply: Approved but escalate failed` | ✓ green (1 item — Slack post succeeded) |
+| `Reply: Approved + case` | DARK (Success branch never took) |
+| `Reply: Denied` | DARK |
+| `Reply: Timeout` | DARK |
+
+Slack thread reply text (matches spec section 5d exactly):
+
+> ❌ **Approval received but escalation failed:** The host is unreachable, perhaps the server is offline.
+> Iris alert #44 remains in the alert queue. Manual escalation required.
+
+The `<error msg>` placeholder in the spec resolved at runtime to `"The host is unreachable, perhaps the server is offline."` — n8n's HTTP node surfaces a human-readable diagnosis rather than a generic "request failed". This is the most useful error signal an analyst could get; the manual-escalation path is unambiguous.
+
+⚠️ **Wait timeout was reset to 1800s before this test** — also satisfies Phase 11's pre-flight requirement that the exported v2 JSON ships with production timeout values, not test shortcuts. No further reset needed before cutover.
+
 ### Side artifacts from Phase 10 testing
 
-Iris alerts #30-#41+ created during Test 1 and Test 2 debug iterations. Iris cases #2 (early SSL-fix test), #4 (Pattern A test, no IOCs), #8/#9 (curl debug), #10 (Test 2 final pass with IOCs). All harmless audit-trail artifacts; no need to clean up.
+Iris alerts #30-#44 created during Tests 1-5 and debug iterations. Iris cases #2 (early SSL-fix test), #4 (Pattern A test, no IOCs), #8/#9 (curl debug), #10 (Test 2 final pass — only legitimate case from Phase 10). All harmless audit-trail artifacts; no need to clean up.
 
-### Phase 10 status
+### Phase 10 status — COMPLETE
 
 - [x] Test 1 — gate skipped — PASSED
 - [x] Test 2 — approve path — PASSED (after Pattern H fix)
-- [ ] Test 3 — deny path — pending
-- [ ] Test 4 — timeout path — pending
-- [ ] Test 5 — escalation failure (Iris down) — pending
+- [x] Test 3 — deny path — PASSED
+- [x] Test 4 — timeout path — PASSED
+- [x] Test 5 — escalation failure (Iris down) — PASSED
 
-Tests 3-5 reuse the same workflow + the now-current Test 2 pinned data (no Anthropic re-call needed).
+All five gate paths verified end-to-end with pinned data. Workflow ready for Phase 11 (Splunk webhook cutover to v2).
 
 ---
 
