@@ -457,7 +457,7 @@
       "typeVersion": 4.4,
       "position": [
         2048,
-        -704
+        -656
       ],
       "id": "e82a70aa-a583-444b-9a04-98c9db0a4ddf",
       "name": "Reply: Approved + case",
@@ -487,6 +487,63 @@
       ],
       "id": "805babcf-075d-4a87-945f-f7c7c394590d",
       "name": "Reply: Approved but escalate failed",
+      "credentials": {
+        "slackApi": {
+          "id": "IWEqjD1DvRajiKXy",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "=json",
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "jsonBody": "={\n  \"channel\": \"C0B0QMQU8QG\",\n  \"thread_ts\": \"{{ $('Post Slack Alert + Approve/Deny').item.json.ts }}\",\n  \"text\": \"\\u274C *Denied* \\u2014 Iris alert <https://192.168.129.133/alerts?alert_ids={{ $('Create Iris Alert').item.json.data.alert_id }}|#{{ $('Create Iris Alert').item.json.data.alert_id }}> remains in the alert queue. No case opened.\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2240,
+        -288
+      ],
+      "id": "7baa18e7-061a-4a92-bd4e-9f9615b0d1a8",
+      "name": "Reply: Denied",
+      "credentials": {
+        "slackApi": {
+          "id": "IWEqjD1DvRajiKXy",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"channel\": \"C0B0QMQU8QG\",\n  \"thread_ts\": \"{{ $('Post Slack Alert + Approve/Deny').item.json.ts }}\",\n  \"text\": \"\\u23F1 *No response in 30 minutes \\u2014 auto-treated as Deny.* Iris alert <https://192.168.129.133/alerts?alert_ids={{ $('Create Iris Alert').item.json.data.alert_id }}|#{{ $('Create Iris Alert').item.json.data.alert_id }}> remains in the alert queue.\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1776,
+        -192
+      ],
+      "id": "d4aaca6a-3a1b-4012-a5fb-2a910f7cceed",
+      "name": "Reply: Timeout",
       "credentials": {
         "slackApi": {
           "id": "IWEqjD1DvRajiKXy",
@@ -725,6 +782,20 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Reply: Denied",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply: Timeout",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -758,7 +829,7 @@
     "callerPolicy": "workflowsFromSameOwner",
     "executionTimeout": 120
   },
-  "versionId": "9e5f05a1-1517-4d8b-928b-47e2ee059031",
+  "versionId": "b216d5b7-858c-4679-b1bd-186ba0e86771",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "d73c7df2dab3dc6daade1ece2f47b854bd0ded40ecf58169066132c9293df425"
