@@ -314,6 +314,34 @@
           "name": "Slack account"
         }
       }
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "limitWaitTime": true,
+        "resumeAmount": 30,
+        "resumeUnit": "minutes",
+        "options": {
+          "responseData": "<!doctype html> <html lang=\"en\"> <head>   <meta charset=\"utf-8\">   <title>SOC Triage &mdash; decision recorded</title>   <style>     body { font-family: system-ui, sans-serif; text-align: center; padding: 4em; background: #f4f5f7; }     h1   { color: #2d3748; }     p    { color: #4a5568; }     .btn { color: #718096; font-size: 0.9em; }   </style> </head> <body>   <h1>&#10003; Decision recorded</h1>   <p>The workflow is processing your decision. You can close this tab.</p>   <p class=\"btn\">A confirmation message will appear in the Slack thread within a few seconds.</p> </body> </html>",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1552,
+        -112
+      ],
+      "id": "51eeb009-d740-459a-b4fd-1e962960e44f",
+      "name": "Wait For Decision",
+      "webhookId": "d9ebd1fa-b774-4ba2-9350-bd0d10c5c189"
     }
   ],
   "pinData": {
@@ -515,6 +543,17 @@
           }
         ]
       ]
+    },
+    "Post Slack Alert + Approve/Deny": {
+      "main": [
+        [
+          {
+            "node": "Wait For Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": false,
@@ -528,7 +567,7 @@
     "callerPolicy": "workflowsFromSameOwner",
     "executionTimeout": 120
   },
-  "versionId": "1d8aeb09-7a9c-4b5b-aa27-8990e29d2d09",
+  "versionId": "7254c67a-6747-474e-b1b3-6fe08f2bac0a",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "d73c7df2dab3dc6daade1ece2f47b854bd0ded40ecf58169066132c9293df425"
