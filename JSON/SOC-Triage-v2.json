@@ -539,8 +539,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        1776,
-        -192
+        1808,
+        -80
       ],
       "id": "d4aaca6a-3a1b-4012-a5fb-2a910f7cceed",
       "name": "Reply: Timeout",
@@ -827,9 +827,9 @@
     "saveDataErrorExecution": "all",
     "saveDataSuccessExecution": "all",
     "callerPolicy": "workflowsFromSameOwner",
-    "executionTimeout": 120
+    "executionTimeout": 2100
   },
-  "versionId": "b216d5b7-858c-4679-b1bd-186ba0e86771",
+  "versionId": "8de60fe0-12a3-4d97-8820-b4de70cd1138",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "d73c7df2dab3dc6daade1ece2f47b854bd0ded40ecf58169066132c9293df425"
