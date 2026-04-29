@@ -11,7 +11,7 @@
       "typeVersion": 2.1,
       "position": [
         -240,
-        0
+        -192
       ],
       "id": "0a36b634-8b05-4527-8249-12792250176f",
       "name": "Webhook",
@@ -40,7 +40,7 @@
       "typeVersion": 1,
       "position": [
         48,
-        0
+        -192
       ],
       "id": "c2672b33-42c9-4445-a84f-091f147099b3",
       "name": "Message a model",
@@ -69,7 +69,7 @@
       "typeVersion": 2.4,
       "position": [
         1120,
-        96
+        -96
       ],
       "id": "597a6547-4669-438d-a786-2ce9c2fac339",
       "name": "Send a message",
@@ -118,7 +118,7 @@
       "typeVersion": 4.4,
       "position": [
         -32,
-        224
+        32
       ],
       "id": "04fa7282-28d1-489c-b4e1-af39b6ec3c4f",
       "name": "enrich_ip_abuseipdb",
@@ -150,7 +150,7 @@
       "typeVersion": 4.4,
       "position": [
         176,
-        224
+        32
       ],
       "id": "b673e894-5809-469c-82f2-38056bc04061",
       "name": "lookup_file_hash_virustotal",
@@ -172,8 +172,8 @@
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.3,
       "position": [
-        368,
-        224
+        384,
+        32
       ],
       "id": "6273b502-0dda-4455-a516-978b2cc72b1a",
       "name": "submit_triage_result"
@@ -186,7 +186,7 @@
       "typeVersion": 2,
       "position": [
         448,
-        0
+        -192
       ],
       "id": "b3e1823f-216e-4d28-8deb-4dd7fdb29c8e",
       "name": "Extract Triage Result"
@@ -243,7 +243,7 @@
       "typeVersion": 4.4,
       "position": [
         672,
-        0
+        -192
       ],
       "id": "1bf38ff3-9822-4d83-a3a8-b878f9316838",
       "name": "Create Iris Alert",
@@ -284,7 +284,7 @@
       "typeVersion": 2.3,
       "position": [
         896,
-        0
+        -192
       ],
       "id": "57711800-5dd5-49db-9ce5-a33dd92029ad",
       "name": "Has Malicious IOCs?"
@@ -304,7 +304,7 @@
       "typeVersion": 4.4,
       "position": [
         1120,
-        -96
+        -288
       ],
       "id": "799a4464-8ba1-4b6b-972a-211917dc5fd3",
       "name": "Post Slack Alert + Approve/Deny",
@@ -337,7 +337,7 @@
       "typeVersion": 1.1,
       "position": [
         1344,
-        -96
+        -288
       ],
       "id": "51eeb009-d740-459a-b4fd-1e962960e44f",
       "name": "Wait For Decision",
@@ -406,7 +406,7 @@
       "typeVersion": 3.4,
       "position": [
         1568,
-        -112
+        -304
       ],
       "id": "718e9ee6-2e83-4894-9861-c3597a4e43d8",
       "name": "Decision?"
@@ -427,8 +427,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        1776,
-        -224
+        1808,
+        -544
       ],
       "id": "c110dd12-5d12-46de-9c5d-70a87dc66639",
       "name": "Escalate Iris Alert",
@@ -441,6 +441,58 @@
         }
       },
       "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"channel\": \"C0B0QMQU8QG\",\n  \"thread_ts\": \"{{ $('Post Slack Alert + Approve/Deny').item.json.ts }}\",\n  \"text\": \"\\u2705 *Approved* \\u2014 Iris case <https://192.168.129.133/case?cid={{ $('Escalate Iris Alert').item.json.data.case_id }}|#{{ $('Escalate Iris Alert').item.json.data.case_id }}> created with {{ $('Create Iris Alert').item.json.data.iocs.length }} IOCs imported.\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2048,
+        -704
+      ],
+      "id": "e82a70aa-a583-444b-9a04-98c9db0a4ddf",
+      "name": "Reply: Approved + case",
+      "credentials": {
+        "slackApi": {
+          "id": "IWEqjD1DvRajiKXy",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"channel\": \"C0B0QMQU8QG\",\n  \"thread_ts\": \"{{ $('Post Slack Alert + Approve/Deny').item.json.ts }}\",\n  \"text\": \"\\u274C *Approval received but escalation failed:* {{ $json.error?.message || 'unknown error' }}.\\nIris alert <https://192.168.129.133/alerts?alert_ids={{ $('Create Iris Alert').item.json.data.alert_id }}|#{{ $('Create Iris Alert').item.json.data.alert_id }}> remains in the alert queue. Manual escalation required.\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2048,
+        -448
+      ],
+      "id": "805babcf-075d-4a87-945f-f7c7c394590d",
+      "name": "Reply: Approved but escalate failed",
+      "credentials": {
+        "slackApi": {
+          "id": "IWEqjD1DvRajiKXy",
+          "name": "Slack account"
+        }
+      }
     }
   ],
   "pinData": {
@@ -675,6 +727,24 @@
           }
         ]
       ]
+    },
+    "Escalate Iris Alert": {
+      "main": [
+        [
+          {
+            "node": "Reply: Approved + case",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply: Approved but escalate failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": false,
@@ -688,7 +758,7 @@
     "callerPolicy": "workflowsFromSameOwner",
     "executionTimeout": 120
   },
-  "versionId": "057bdb49-af58-4a4c-a1aa-20036bed4e2d",
+  "versionId": "9e5f05a1-1517-4d8b-928b-47e2ee059031",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "d73c7df2dab3dc6daade1ece2f47b854bd0ded40ecf58169066132c9293df425"
