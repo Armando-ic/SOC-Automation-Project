@@ -418,8 +418,9 @@
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "dfirIrisApi",
         "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"iocs_import_list\": \"{{ $('Create Iris Alert').item.json.data.iocs.map(i => i.ioc_uuid) }}\",\n  \"assets_import_list\": [],\n  \"import_as_event\": true,\n  \"note\": \"Auto-escalated by SOC Automation A2 after analyst approval.\",\n  \"case_tags\": \"soc-automation,a2,auto-escalated\",\n  \"case_title\": \"[ALERT #{{ $('Create Iris Alert').item.json.data.alert_id }}] {{ $('Extract Triage Result').item.json.alert_name }} \\u2014 {{ $('Extract Triage Result').item.json.severity }}\"\n}",
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.escalate_body }}",
         "options": {
           "allowUnauthorizedCerts": true
         }
@@ -427,8 +428,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        1808,
-        -544
+        2048,
+        -576
       ],
       "id": "c110dd12-5d12-46de-9c5d-70a87dc66639",
       "name": "Escalate Iris Alert",
@@ -456,8 +457,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        2048,
-        -656
+        2288,
+        -688
       ],
       "id": "e82a70aa-a583-444b-9a04-98c9db0a4ddf",
       "name": "Reply: Approved + case",
@@ -482,8 +483,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        2048,
-        -448
+        2288,
+        -480
       ],
       "id": "805babcf-075d-4a87-945f-f7c7c394590d",
       "name": "Reply: Approved but escalate failed",
@@ -550,6 +551,19 @@
           "name": "Slack account"
         }
       }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ai = $('Create Iris Alert').first().json.data;\nconst tr = $('Extract Triage Result').first().json;\n\nconst body = {\n  iocs_import_list: ai.iocs.map(i => i.ioc_uuid),\n  assets_import_list: [],\n  import_as_event: true,\n  note: \"Auto-escalated by SOC Automation A2 after analyst approval.\",\n  case_tags: \"soc-automation,a2,auto-escalated\",\n  case_title: `[ALERT #${ai.alert_id}] ${tr.alert_name} \\u2014 ${tr.severity}`\n};\n\nreturn [{ json: { escalate_body: JSON.stringify(body), escalate_body_preview: body } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1840,
+        -576
+      ],
+      "id": "779fd942-dd1e-4030-a745-a1abf9c91929",
+      "name": "Build Escalate Body"
     }
   ],
   "pinData": {
@@ -590,28 +604,28 @@
           "content": [
             {
               "type": "tool_use",
-              "id": "toolu_01LqNBrNZ55PzoWv9DmheJB4",
+              "id": "toolu_01G3K81FEjyJQiX8J7uPhDcz",
               "name": "submit_triage_result",
               "input": {
                 "schema_version": "v1",
-                "alert_summary": "External brute-force attempt against host DESKTOP-VNEF7PC: 47 failed Windows logon events (EventCode 4625) targeting user 'mydfir' from public IP 185.220.101.42 (a known Tor exit node).",
+                "alert_summary": "External brute-force attempt against host DESKTOP-VNEF7PC: 47 failed Windows logon events (EventCode 4625) targeting user 'mydfir' from 185.220.101.42, a known Tor exit node with 91% AbuseIPDB confidence and extensive SSH/RDP brute-force history.",
                 "severity": "high",
-                "severity_rationale": "Source IP is a confirmed Tor exit node (tor-exit-42.for-privacy.net) with an AbuseIPDB confidence score of 85 and 90 reports across 51 distinct reporters, including SSH brute force, web app attacks, and credential stuffing. 47 failed logons against a single user from an external Tor IP indicates an active, targeted brute-force attempt. Severity is high rather than critical because no successful authentication (4624) is reported in the alert data — escalate to critical immediately if a successful login from this IP is observed.",
+                "severity_rationale": "Source IP is a confirmed Tor exit node (tor-exit-42.for-privacy.net) with very high abuse score (91%) and 92 reports across 52 distinct users for brute-force activity. 47 failed logons against a single account in a short window is a clear active brute-force pattern from an external untrusted source. Severity is high (not critical) because the alert reflects only failed attempts (4625) — no evidence of a successful authentication (4624) was provided. If a successful logon is confirmed, escalate to critical.",
                 "mitre_techniques": [
                   {
+                    "id": "T1110",
+                    "name": "Brute Force",
+                    "tactic": "Credential Access"
+                  },
+                  {
                     "id": "T1110.001",
-                    "name": "Brute Force: Password Guessing",
+                    "name": "Password Guessing",
                     "tactic": "Credential Access"
                   },
                   {
                     "id": "T1090.003",
                     "name": "Proxy: Multi-hop Proxy",
                     "tactic": "Command and Control"
-                  },
-                  {
-                    "id": "T1078",
-                    "name": "Valid Accounts",
-                    "tactic": "Initial Access"
                   }
                 ],
                 "iocs": {
@@ -619,6 +633,7 @@
                     "185.220.101.42"
                   ],
                   "domains": [
+                    "for-privacy.net",
                     "tor-exit-42.for-privacy.net"
                   ],
                   "file_hashes": [],
@@ -635,7 +650,7 @@
                     "ioc_type": "ip",
                     "verdict": "malicious",
                     "source": "AbuseIPDB",
-                    "summary": "Confirmed Tor exit node (for-privacy.net, DE). AbuseIPDB confidence 85/100, 90 reports from 51 distinct users. Repeatedly reported for SSH brute force, web app attacks, credential stuffing, vulnerability scanning, and form spam. Last reported 2026-04-28."
+                    "summary": "Confidence 91%, 92 reports from 52 distinct users. Tor exit node (tor-exit-42.for-privacy.net) hosted in Germany on 'Network for Tor-Exit traffic.' (for-privacy.net). Reports include SSH brute-force, Plesk/WordPress login attacks, web vuln scanning, and honeypot hits. Last reported 2026-04-29."
                   }
                 ]
               },
@@ -778,7 +793,7 @@
       "main": [
         [
           {
-            "node": "Escalate Iris Alert",
+            "node": "Build Escalate Body",
             "type": "main",
             "index": 0
           }
@@ -816,6 +831,17 @@
           }
         ]
       ]
+    },
+    "Build Escalate Body": {
+      "main": [
+        [
+          {
+            "node": "Escalate Iris Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": false,
@@ -829,7 +855,7 @@
     "callerPolicy": "workflowsFromSameOwner",
     "executionTimeout": 2100
   },
-  "versionId": "8de60fe0-12a3-4d97-8820-b4de70cd1138",
+  "versionId": "8a7c7ab4-60b0-41bc-9a26-4c2d62dae4e9",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "d73c7df2dab3dc6daade1ece2f47b854bd0ded40ecf58169066132c9293df425"

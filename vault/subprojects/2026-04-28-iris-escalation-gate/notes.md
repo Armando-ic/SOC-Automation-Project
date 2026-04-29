@@ -171,6 +171,130 @@ The four+ Iris alerts already created during Branch A debugging (#13, #14, #15, 
 
 ---
 
+## 2026-04-29 (impl) — Phase 10 Tests 1-2 + the iocs_import_list saga
+
+### Test 1 — Gate skipped: PASSED
+
+Pinned Test 1 webhook payload (RFC1918 internal brute force — `src_ip: 192.168.129.1, count: 5, search_name: Test-Brute-Force`) via curl-to-test-webhook + repinned `Message a model` after one fresh Anthropic call.
+
+| Check | Result |
+|---|---|
+| `alert_iocs` empty | ✓ `[]` |
+| `alert_iocs_summary` | ✓ `"_none_"` |
+| Claude triage | ✓ severity `"medium"`, sensible for low-volume internal |
+| `severity_iris_id: 1` → Iris `severity_name: "Medium"` | ✓ severity mapping (Phase 4 fix) flowing through |
+| Iris alert created with `iocs: []` | ✓ alert #30 |
+| IF false branch took | ✓ visible on canvas |
+| Slack: plain alert, NO buttons | ✓ |
+| Wait For Decision NOT reached | ✓ |
+| Total execution | < 30s |
+
+### Test 2 — Approve path: PASSED (after substantial debugging — see saga below)
+
+Pinned Test 2 webhook (`185.220.101.42` Tor exit, count: 47) + fresh Anthropic call. Final pass produced Iris alert #41 → case #10 with the IOC properly imported into the case-level threat-intel DB.
+
+### Saga — Iris escalate body shape (4 patterns tried, 1 worked)
+
+The plan's Task 8.1 escalate body shape (and Iris's documented OpenAPI spec) had several traps. Below is the full timeline so the next session doesn't re-discover them.
+
+**Pattern A (plan-as-written): "Using JSON" body, quoted `{{ }}` for array.**
+
+```json
+"iocs_import_list": "{{ $('Create Iris Alert').item.json.data.iocs.map(i => i.ioc_uuid) }}"
+```
+
+Result: Iris HTTP 200, case created, **but `iocs_import_list` silently ignored** — n8n's template substitution wraps the array result in JSON-string quotes (`"[\"uuid\"]"`), which Iris parses as a string and ignores. Case-level IOC tab empty. Wrong.
+
+**Pattern B: "Using JSON" body, unquoted `{{ }}` for array (Expression mode).**
+
+```json
+"iocs_import_list": {{ $('Create Iris Alert').item.json.data.iocs.map(i => i.ioc_uuid) }}
+```
+
+Result: n8n rejected — `{{ }}` outside string literals isn't valid JS in Expression mode (the field's mode at the time). Even in Fixed mode, n8n's static JSON validation likely rejects it.
+
+**Pattern C: "Using JSON" body, JS object literal in Expression mode.**
+
+```js
+={
+  iocs_import_list: $('...').item.json.data.iocs.map(i => i.ioc_uuid),
+  ...
+}
+```
+
+Result: n8n rejected with `"The value in the 'JSON Body' field is not valid JSON"` — n8n statically validates the field as JSON syntax before evaluation. JS object literals don't pass the static check.
+
+**Pattern D: "Using JSON" body, `JSON.stringify({...})` in Expression mode.**
+
+```js
+=JSON.stringify({ iocs_import_list: ..., ... })
+```
+
+Result: same n8n static-JSON-validation rejection. The `JSON.stringify(...)` expression doesn't look like JSON at design time, so n8n rejects without ever evaluating.
+
+**Pattern E (Fields Below): "Using Fields Below" body with each parameter as a separate field.**
+
+Result: Iris HTTP 400 with `'NoneType' object is not iterable` — n8n's Fields Below sent the array-typed parameter as `null` to Iris (Expression-mode array result didn't survive Fields Below's stringification). Iris's escalate handler tried to iterate over null.
+
+**Pattern F: "Raw" body type + Content-Type header + JSON.stringify expression.**
+
+```
+=JSON.stringify({ iocs_import_list: ..., ... })
+```
+
+Result: Iris HTTP 500 (Internal Server Error, generic HTML). Body shape was correct but a different bug was triggered. Initially thought to be Pattern F's fault, but direct curl with the same body shape ALSO hit either 500 or NoneType errors. Root cause was on Iris's side (see "Iris escalate handler bugs" below).
+
+**Pattern H (final, working): Code node builds the body, HTTP Request sends as Raw.**
+
+Inserted a `Build Escalate Body` Code node between the Switch's approve output and Escalate Iris Alert. The Code node has full JS access, builds the body object with proper types, calls `JSON.stringify()` once, returns a `escalate_body` string field plus a `escalate_body_preview` debug field. The Escalate node then uses Raw body with `={{ $json.escalate_body }}`.
+
+```js
+const ai = $('Create Iris Alert').first().json.data;
+const tr = $('Extract Triage Result').first().json;
+
+const body = {
+  iocs_import_list: ai.iocs.map(i => i.ioc_uuid),
+  assets_import_list: [],
+  import_as_event: true,
+  note: "Auto-escalated by SOC Automation A2 after analyst approval.",
+  case_tags: "soc-automation,a2,auto-escalated",
+  case_title: `[ALERT #${ai.alert_id}] ${tr.alert_name} — ${tr.severity}`
+};
+
+return [{ json: { escalate_body: JSON.stringify(body), escalate_body_preview: body } }];
+```
+
+Code node mode: **Run Once for All Items** (matching Extract Triage Result's pattern). Run Once for Each Item produces validation error `"A 'json' property isn't an object [item 0]"` because the array-wrapped return doesn't fit that mode.
+
+**Result: Iris HTTP 200, case #10 created, IOC `185.220.101.42` properly imported into case-level IOC tab.** Verified visually in Iris UI with the right tags (`soc-automation, a2`) and TLP (Amber).
+
+**Generalized rule for the runbook:** for n8n HTTP Request bodies that include arrays, objects, booleans, or numbers (non-string types), use the **Code-node-builds-body + Raw-HTTP-body** pattern. Don't rely on n8n's "Using JSON" template substitution or "Using Fields Below" type coercion — both have silent failure modes for non-string types. The Code node is debuggable (output panel shows the constructed body) and bypasses all of n8n's body field validation/stringification.
+
+### Iris escalate handler bugs (deployment-specific, captured 2026-04-29)
+
+While debugging via direct curl, discovered Iris's `/alerts/escalate/{alert_id}` handler has unhandled-None bugs in fields the OpenAPI spec marks optional:
+
+- Missing `case_tags` → Python `'NoneType' object has no attribute 'split'` — handler calls `.split()` on `case_tags` without null-check
+- Missing `assets_import_list` → Python `'NoneType' object is not iterable` — handler iterates over `assets_import_list` without null-check
+
+**Both must be present in the body** (even if empty: `assets_import_list: []`, `case_tags: "anything"`). Our body always includes both, so this isn't a current blocker, but the runbook should call this out: don't trim "optional" fields from the escalate body without testing — Iris's spec/impl mismatch will silently 500.
+
+### Side artifacts from Phase 10 testing
+
+Iris alerts #30-#41+ created during Test 1 and Test 2 debug iterations. Iris cases #2 (early SSL-fix test), #4 (Pattern A test, no IOCs), #8/#9 (curl debug), #10 (Test 2 final pass with IOCs). All harmless audit-trail artifacts; no need to clean up.
+
+### Phase 10 status
+
+- [x] Test 1 — gate skipped — PASSED
+- [x] Test 2 — approve path — PASSED (after Pattern H fix)
+- [ ] Test 3 — deny path — pending
+- [ ] Test 4 — timeout path — pending
+- [ ] Test 5 — escalation failure (Iris down) — pending
+
+Tests 3-5 reuse the same workflow + the now-current Test 2 pinned data (no Anthropic re-call needed).
+
+---
+
 ## 2026-04-29 (impl) — Phase 6 verified + Phase 0.2 answered live
 
 Three concrete findings, one critical, plus Phase 0.2's deferred questions all answered against a real Wait node.
