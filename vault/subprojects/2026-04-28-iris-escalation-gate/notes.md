@@ -404,6 +404,104 @@ Cosmetic only — the case still works; only the title display is affected. Defe
 
 ---
 
+## 2026-04-29 (impl) — Phase 11 cutover + e2e PASSED
+
+### Phase 11.1 — Splunk webhook cutover
+
+Webhook GUIDs differed between v1 and v2 (n8n didn't preserve GUID on workflow duplicate in Phase 1.2):
+
+| Workflow | Production webhook URL |
+|---|---|
+| v1 (legacy) | `http://192.168.129.132:5678/webhook/9ccbefed-5e8a-4f16-87f4-12128ffa89ae` |
+| v2 (A2) | `http://192.168.129.132:5678/webhook/db7245f7-8451-4bea-b47d-f6ad35b818cd` |
+
+Sequence executed:
+1. Activated `SOC Triage v2` in n8n
+2. Deactivated `SOC Triage v1 (legacy)` in n8n
+3. Updated Splunk's `Test-Brute-Force` saved-search webhook URL to v2's
+
+Cutover window was safe because the saved search was already disabled from Phase 10 testing — no in-flight alerts to lose.
+
+**Generalized rule for the runbook:** when n8n duplicates a workflow, do not assume the webhook GUID is preserved. Compare both before activating to know whether Splunk needs a URL update or not. (n8n's behavior may differ across versions.)
+
+### Phase 11.2 — End-to-end with real Splunk alert: PASSED ×2
+
+#### The Splunk saved-search edit gotcha
+
+Plan recommended appending `| eval src_ip="..."` to the `Test-Brute-Force` saved search to force an external IP through the gate-fires path. Both append-after-stats AND a duplicate-then-edit attempt **silently dropped the eval clause** when saved — Splunk's saved-alert form normalizer rejects post-stats modifications.
+
+**Workaround that worked:** Save As Alert from the Search & Reporting search bar with the eval inlined inside the pipeline (before stats). Created a new alert `Test-Brute-Force-External-Spoofed` with:
+
+```
+index="mydfir-project" EventCode=4625
+| eval src_ip="185.220.101.42"
+| stats count by _time, ComputerName, user, src_ip
+```
+
+The new alert pointed at v2's production webhook URL.
+
+**Generalized rule for the runbook:** for Splunk saved-search SPL modifications that include `eval` or other transformations affecting fields, do them in the Search & Reporting search bar and "Save As Alert" rather than editing the existing saved search through the Settings UI — the Settings-side edit form has hidden validation that strips post-stats modifications.
+
+#### What ran
+
+The Splunk saved search fired on its 1-minute cron twice; both runs went through the gate end-to-end and were Approved by the analyst.
+
+| | Run 1 | Run 2 |
+|---|---|---|
+| Splunk → n8n delay | ~60s (one cron tick) | ~60s |
+| n8n execution duration | ~32s (analyst click latency) | ~32s |
+| Iris alert created | **#47** | **#48** |
+| Slack post with buttons | ✓ | ✓ |
+| Analyst clicked ✅ Approve | ✓ | ✓ |
+| Iris case escalated | **#11** | **#12** |
+| Case-level IOC (185.220.101.42, ip-src, soc-automation+a2 tags, TLP:Amber) | ✓ | ✓ |
+| Reply: Approved + case Slack thread reply | ✓ | ✓ |
+
+All A2 architectural deliverables validated against real production traffic:
+- Splunk webhook → v2 (cutover GUID change works)
+- Real Anthropic API call (no pinning) — schema-compliant structured output with all fields populated correctly (ioc_type=ip surfaced from the system prompt addendum)
+- Real AbuseIPDB enrichment of 185.220.101.42 — MALICIOUS, confidence 91/100, full Tor exit context surfaced into the Slack message
+- Iris alert created with `alert_iocs` populated → API response captured by n8n → IOC UUIDs flowed through to escalate
+- Gate fired (`Has Malicious IOCs?` IF → true, because filtered list non-empty)
+- Slack Block Kit message rendered with two URL buttons (signed `$execution.resumeUrl` resolved at Slack-post time per Phase 6 finding)
+- Wait For Decision held the workflow until the analyst's button click resumed it via the signed webhook
+- Decision Switch routed to approve based on `query.decision==='approve'` (per Phase 6 finding, not the spec's original `timedOut` design)
+- Build Escalate Body Code node + Raw HTTP escalate (Pattern H from Phase 10) succeeded against live Iris
+- Escalation Succeeded? IF took the success branch
+- Reply: Approved + case Slack thread reply posted with the case link
+
+#### Em-dash bug confirmed in production traffic
+
+Cases #11 and #12 both came back with case names `... � high` instead of `... — high` — the same `Build Escalate Body` em-dash mangling that hit case #10 in Test 2. Three production-real cases now demonstrate the bug; deferring the fix to Phase 12 cleanup is acceptable but the fix should ship before A2 closes.
+
+### Phase 11 status — COMPLETE
+
+- [x] Phase 11.1 — webhook cutover (v2 active, v1 inactive, Splunk URL updated)
+- [x] Phase 11.2 — end-to-end with real Splunk alert (×2 runs, both PASSED full Approve path)
+
+Splunk saved search disabled after the e2e (otherwise it would have kept producing cases on every cron tick).
+
+A2's success criteria from the spec:
+
+| # | Criterion | Status |
+|---|---|---|
+| 1 | All 5 pinned tests pass | ✓ Phase 10 |
+| 2 | E2E with real Splunk alert succeeds for Approve path | ✓ Phase 11.2 |
+| 3 | Iris cases created from approved alerts; case-level IOC database populated | ✓ Phase 11.2 (cases #11 #12) |
+| 4 | Slack thread shows full audit trail | ✓ |
+| 5 | URL buttons render and are clickable from LAN browser | ✓ |
+| 6 | Timeout fires correctly at 30 min | ✓ Phase 10 Test 4 (verified at 30s test value; production value 1800s confirmed by inspection) |
+| 7 | Negative-path test (escalation failure) produces expected message | ✓ Phase 10 Test 5 |
+| 8 | runbook.md covers deploy / rollback / verify / debug | ⏳ Phase 12 |
+| 9 | notes.md captures gotchas | ✓ (this file) |
+| 10 | ADR for ioc_type schema enhancement | ⏳ Phase 12 |
+| 11 | Log entry at vault root marks A2 complete | ⏳ Phase 12 |
+| 12 | Iris IOC type ID catalog in dfir-iris.md | ✓ Phase 0.1 |
+
+Remaining: Phase 12 documentation closure.
+
+---
+
 ## 2026-04-29 (impl) — Phase 6 verified + Phase 0.2 answered live
 
 Three concrete findings, one critical, plus Phase 0.2's deferred questions all answered against a real Wait node.
