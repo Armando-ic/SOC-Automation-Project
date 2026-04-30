@@ -33,6 +33,7 @@ If the MCP appears not to be connected, see [[runbooks/splunk-mcp-setup]].
 | Component details | `architecture/components/<component>.md` |
 | Why a non-obvious choice was made | `decisions/` (numbered ADRs) |
 | How to do an operation | `runbooks/` |
+| Per-MITRE-technique detection content | `detections/` (one page per T-id; `_template.md` to add new) |
 | Recent activity history | `log.md` (tail it) |
 | Catalog of every wiki page | `index.md` |
 | Original transcripts, screenshots, JSON exports | `../Transcripts/`, `../Photos/`, `../JSON/` at project root |
