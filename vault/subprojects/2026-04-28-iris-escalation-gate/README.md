@@ -57,6 +57,9 @@ The architectural deliverable is the gate pattern itself — Slack URL buttons �
 
 ## Successors
 
-- **A3 — Splunk lookup blocklist.** Reuses A2's gate pattern with a second action type.
+Sequencing as of 2026-04-30 (see [[../../architecture/target-state#sequencing-decision-2026-04-30]] for rationale):
+
+- **D1 — Detection foundations (Sysmon + Atomic Red Team + Splunk SPL practice).** Pulled ahead of A3; generates richer detection content the SOAR pipeline can consume. Job-prep priority drives the sequencing.
+- **A3 — Splunk lookup blocklist.** Reuses A2's gate pattern with a second action type. Triggers schema bump to v2 per [[../../decisions/0005-additive-ioc-type-schema-enhancement]]. Architectural dependency on A2 is unchanged by the D1-first sequencing.
 - **A2.5 — Tunnel + signed Slack interactivity** (optional, decoupled). Replace URL buttons with real Slack interactivity once a tunnel is set up.
-- **B+ (EDR layer).** Generates richer alerts; no architectural change to A2.
+- **B+ (EDR layer).** Generates richer alerts beyond what Sysmon covers (file-system collection, response actions, threat-intel integration); may absorb or extend D1.
