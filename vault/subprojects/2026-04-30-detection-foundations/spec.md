@@ -246,7 +246,7 @@ The risk concentrates entirely in Claude's behavior on the unfamiliar payload sh
 The query, then per-clause annotation:
 
 ```spl
-index=mydfir-project source="WinEventLog:Microsoft-Windows-Sysmon/Operational"
+index=mydfir-project source="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational"
 EventCode=1 Image="*\\powershell.exe"
 | regex CommandLine="(?i)\s-(en?c|encodedcommand)\s"
 | stats count, values(CommandLine) as command_lines, values(ParentImage) as parents
@@ -256,7 +256,7 @@ EventCode=1 Image="*\\powershell.exe"
 | Clause | What it does |
 |---|---|
 | `index=mydfir-project` | Narrows the search to the project's index. Searching without an `index=` clause is the #1 SPL beginner mistake — it scans every index Splunk knows about, which is slow and expensive. |
-| `source="WinEventLog:Microsoft-Windows-Sysmon/Operational"` | Restricts to events from Sysmon's channel. Excludes Windows Security/App/System events landing in the same index/sourcetype. |
+| `source="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational"` | Restricts to events from Sysmon's channel. Excludes Windows Security/App/System events landing in the same index/sourcetype. |
 | `EventCode=1` | Sysmon's Process Create event. Sysmon assigns numeric EventCodes to event types; 1 is process creation. |
 | `Image="*\\powershell.exe"` | The Image field holds the full path to the executable. The `\\` escapes the backslash; `*\\powershell.exe` matches `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe` and 32-bit equivalents. |
 | `\|` | The pipe — SPL pipelines pass the result of one stage to the next. Same idea as a Unix shell pipe. |
@@ -383,7 +383,7 @@ The split mirrors the precedent set by A2: A2's runbook held the procedural esca
 
 - **Frontmatter** — `status: active`, `updated: <install date>`, `related: [[../current-state]], [[splunk]], [[../../subprojects/2026-04-30-detection-foundations/runbook]]`.
 - **What it is** — one paragraph: Sysmon is Sysinternals' Windows system service that logs detailed process/file/network/registry telemetry to a dedicated Windows Event Log channel; supplements (does not replace) the native Security/App/System logs.
-- **Where it runs** — Windows 10 VM (192.168.129.x captured during D1 Phase 0); service name `Sysmon64`; channel `Microsoft-Windows-Sysmon/Operational`; ingested by the existing Splunk Universal Forwarder (forwarder config edit per 2.2); lands in Splunk under `index=mydfir-project sourcetype=XmlWinEventLog source="WinEventLog:Microsoft-Windows-Sysmon/Operational"`.
+- **Where it runs** — Windows 10 VM (192.168.129.x captured during D1 Phase 0); service name `Sysmon64`; channel `Microsoft-Windows-Sysmon/Operational`; ingested by the existing Splunk Universal Forwarder (forwarder config edit per 2.2); lands in Splunk under `index=mydfir-project sourcetype=XmlWinEventLog source="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational"`.
 - **Configuration table** — config source (SwiftOnSecurity/sysmon-config master branch, commit SHA captured at install), config file (`sysmonconfig-export.xml` off-the-shelf, no edits), Sysmon binary version, hash algorithms enabled.
 - **EventCode reference table** (high-yield codes the SwiftOnSecurity config captures):
 
@@ -414,7 +414,7 @@ The split mirrors the precedent set by A2: A2's runbook held the procedural esca
   | `QueryName` | (EventCode 22) the DNS name being looked up |
   | `DestinationIp` / `DestinationPort` | (EventCode 3) the network connection target |
 
-- **"Why `source=` (not `sourcetype=`) is the channel filter"** — short note: Splunk Add-on for Microsoft Windows assigns the same sourcetype (`XmlWinEventLog`) to all Windows Event Log channels. Sysmon's channel differentiates by the `source=` field, not `sourcetype=`. Future SPL queries against Sysmon should use `source="WinEventLog:Microsoft-Windows-Sysmon/Operational"`.
+- **"Why `source=` (not `sourcetype=`) is the channel filter"** — short note: Splunk Add-on for Microsoft Windows assigns the same sourcetype (`XmlWinEventLog`) to all Windows Event Log channels. Sysmon's channel differentiates by the `source=` field, not `sourcetype=`. Future SPL queries against Sysmon should use `source="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational"`.
 - **How to verify it's working** — the `notepad.exe` smoke test + EventCode coverage check.
 - **References** — links to Microsoft's Sysmon docs and SwiftOnSecurity's repo, plus a back-link to D1's README and to splunk.md.
 
@@ -460,7 +460,7 @@ The Universal Forwarder ships the event over 9997/tcp to `192.168.129.131`. Splu
 
 - `index = mydfir-project`
 - `sourcetype = XmlWinEventLog`
-- `source = WinEventLog:Microsoft-Windows-Sysmon/Operational`
+- `source = XmlWinEventLog:Microsoft-Windows-Sysmon/Operational`
 
 Splunk Add-on for Microsoft Windows extracts structured Sysmon fields into searchable form. (Phase 0 verifies field extraction works on the first ingested event.)
 
@@ -549,7 +549,7 @@ D1 doesn't fit A1/A2's "pinned-data test cases" pattern cleanly. A1/A2 had multi
 
 **Tier 1 — Infrastructure smoke tests** (after each install step, before the worked example):
 
-1. *Sysmon producing events.* Spawn `notepad.exe` from admin cmd on the Windows VM. Within 60 seconds, `index=mydfir-project source="WinEventLog:Microsoft-Windows-Sysmon/Operational" EventCode=1 Image="*\\notepad.exe"` returns ≥1 event. Validates Sysmon install + forwarder config + Splunk ingestion + field extraction in one shot.
+1. *Sysmon producing events.* Spawn `notepad.exe` from admin cmd on the Windows VM. Within 60 seconds, `index=mydfir-project source="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational" EventCode=1 Image="*\\notepad.exe"` returns ≥1 event. Validates Sysmon install + forwarder config + Splunk ingestion + field extraction in one shot.
 2. *Sysmon EventCode coverage check.* The meta query from the observation toolkit: `... | stats count by EventCode | sort -count`. Confirms which EventCodes the SwiftOnSecurity config is producing in the lab — useful baseline for any future "why didn't I see X?" debugging.
 3. *ART runnable.* `Invoke-AtomicTest T1059.001 -ShowDetailsBrief` returns the test catalog without errors.
 
@@ -638,3 +638,31 @@ Sequencing as of 2026-04-30 (per [[../../architecture/target-state#sequencing-de
 - **C — Detection engineering at scale.** Inherits D1's `vault/detections/` directory.
 - **H — Automated purple team.** Inherits D1's manual run loop.
 - **B — EDR layer.** Independent.
+
+---
+
+## Errata (in-flight corrections during D1 execution)
+
+These corrections were applied during D1 implementation when Phase 0 surfaced realities the spec hadn't anticipated. Captured here per the precedent set by A2's spec.md Errata section.
+
+### E1: Sysmon source filter — `XmlWinEventLog:` not `WinEventLog:`
+
+**Original spec text** (§ 2.4, § 2.5, § 2.10, § 3.3, smoke test queries): `source="WinEventLog:Microsoft-Windows-Sysmon/Operational"`
+
+**Corrected:** `source="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational"` — applied via global replace in this file and in `plan.md`.
+
+**Why:** Phase 0 (2026-04-30) discovered that the existing UF `inputs.conf` already had a Sysmon stanza (predating D1 by ~5 days) with an explicit `source = XmlWinEventLog:Microsoft-Windows-Sysmon/Operational` override. During Phase 0 investigation, the user installed the **Splunk Add-on for Microsoft Sysmon** (`Splunk_TA_microsoft_sysmon` v5.0.0, Splunkbase) — that add-on's props/transforms are keyed on the `XmlWinEventLog:` source value. Keeping the override is the canonical pattern when the Sysmon Add-on is installed (the add-on rationalizes the override). The spec's original assumption (default `WinEventLog:` prefix) reflected the world before the Sysmon Add-on existed in this lab.
+
+**Impact:** SPL detection for T1059.001 (§ 2.5), all observation-toolkit queries (§ 2.9), smoke-test queries, and the worked-example walkthrough (§ 3) all use the corrected source string.
+
+### E2: Phase 2 Tasks 2.1 / 2.2 reduce to verify-only
+
+**Original plan:** backup `inputs.conf`, append a new Sysmon stanza, restart forwarder.
+
+**Corrected (in plan.md):** stanza already exists from prior tutorial setup (2026-04-25). D1 only restarts the forwarder; no `inputs.conf` edit happens. Defensive backup retained.
+
+### E3: Forwarder restart activates dormant overrides on PowerShell and Windows Defender stanzas
+
+The pre-existing `inputs.conf` also has `source =` overrides on the `Microsoft-Windows-PowerShell/Operational` and `Microsoft-Windows-Windows Defender/Operational` stanzas — overrides that hadn't taken effect because the forwarder hadn't been restarted since the 2026-04-25 edit. D1's Phase 2 restart activates them as a side effect: those channels' `source` field values in Splunk lose the `WinEventLog:` prefix.
+
+**Vault grep (2026-04-30) confirmed zero downstream consumers** of the old (`WinEventLog:Microsoft-Windows-PowerShell/Operational`, `WinEventLog:Microsoft-Windows-Windows Defender/Operational`) source strings — no breakage. Phase 8's `splunk.md` update notes the change in passing for any future search/dashboard work.
