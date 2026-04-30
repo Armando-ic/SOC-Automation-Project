@@ -18,6 +18,7 @@ Catalog of every page in this vault, organized by category. Updated whenever a n
 ### Components
 
 - [[architecture/components/splunk]] — SIEM
+- [[architecture/components/sysmon]] — Sysmon: install metadata, EventCode + field reference, gotchas
 - [[architecture/components/n8n]] — Workflow engine
 - [[architecture/components/dfir-iris]] — Case management
 - [[architecture/components/claude-api]] — AI triage in n8n
@@ -26,7 +27,14 @@ Catalog of every page in this vault, organized by category. Updated whenever a n
 ## Sub-projects
 
 - [[subprojects/2026-04-27-structured-outputs/README]] — A1: Structured Outputs (complete)
-- [[subprojects/2026-04-28-iris-escalation-gate/README]] — A2: Iris Escalation Gate (active — spec written, awaiting plan)
+- [[subprojects/2026-04-28-iris-escalation-gate/README]] — A2: Iris Escalation Gate (complete)
+- [[subprojects/2026-04-30-detection-foundations/README]] — D1: Detection Foundations (active — implementation in progress)
+
+## Detections
+
+- [[detections/README]] — Detection catalog index (per-MITRE-technique pages)
+- [[detections/_template]] — Skeleton for a new technique page
+- [[detections/t1059-001-powershell-encoded]] — T1059.001 PowerShell encoded command (D1 worked example)
 
 ## Decisions (ADRs)
 
@@ -34,6 +42,7 @@ Catalog of every page in this vault, organized by category. Updated whenever a n
 - [[decisions/0002-claude-api-vs-subscription]] — When to use API vs Max subscription
 - [[decisions/0003-split-structured-outputs-from-response-actions]] — Why we split Sub-project A
 - [[decisions/0004-mirror-mcp-to-claude-code]] — Why Splunk MCP is configured in both Desktop and Code
+- [[decisions/0005-additive-ioc-type-schema-enhancement]] — A2's additive `ioc_type` schema enhancement
 
 ## Runbooks
 
