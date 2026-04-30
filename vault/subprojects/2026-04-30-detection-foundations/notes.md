@@ -90,7 +90,17 @@ This is **ADR-0006 candidate territory**: Sysmon Add-on installation was a late-
 
 ### Splunk daily license headroom
 
-Not yet checked at Phase 0 (was about to be Task 0.2 Step 3 when the inputs.conf surprise surfaced and consumed the time). Will check before Phase 6 live-fire when the volume risk peaks.
+Captured via `/services/licenser/pools` and `/services/licenser/licenses` REST endpoints:
+
+| pool | quota | used today |
+|---|---|---|
+| auto_generated_pool_download-trial | MAX (no per-pool cap) | 1.86 MB |
+| auto_generated_pool_forwarder | MAX | 0.00 MB |
+| auto_generated_pool_free | MAX | 0.00 MB |
+
+License stack: **Splunk Enterprise Download Trial** (500 MB/day, type `download-trial`, VALID — currently active), **Splunk Forwarder** (1 MB, type `forwarder`, VALID — non-indexing), **Splunk Free** (500 MB/day, type `free`, VALID — fallback when trial expires).
+
+**Takeaway:** ~1.86/500 MB consumed today (~0.4%). ART runs are KB-scale; Phase 6 live-fire will not approach the cap. License recovery procedure (runbook Phase 9.6) only matters once trial expires and we fall back to free.
 
 ### VMware Workstation snapshot — pending user action
 
