@@ -585,7 +585,7 @@ Via the Splunk MCP or Splunk Search & Reporting:
 index=mydfir-project source="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational"
 EventCode=1 Image="*\\notepad.exe"
 earliest=-10m
-| table _time, ComputerName, User, Image, CommandLine, ParentImage
+| table _time, host, User, Image, CommandLine, ParentImage
 ```
 
 **SPL annotation:**
@@ -594,7 +594,7 @@ earliest=-10m
 - `EventCode=1` — Sysmon's Process Create event.
 - `Image="*\\notepad.exe"` — match any path ending in `notepad.exe`. The `\\` is the escaped backslash; SPL's path matching uses backslash separators on Windows-sourced events.
 - `earliest=-10m` — last 10 minutes (cushion in case of indexing delay).
-- `| table _time, ComputerName, User, Image, CommandLine, ParentImage` — output a flat table of just the columns we care about. `table` is the simplest output formatter — like `SELECT col1, col2 FROM ...`.
+- `| table _time, host, User, Image, CommandLine, ParentImage` — output a flat table of just the columns we care about. `table` is the simplest output formatter — like `SELECT col1, col2 FROM ...`.
 
 Expected: at least one row, with `_time` matching the spawn time within ~60 seconds, `Image` ending in `notepad.exe`, `CommandLine` showing `notepad.exe` (or full path), `ParentImage` showing whatever launched it (likely the SSH session's host process or `cmd.exe`).
 
@@ -782,7 +782,7 @@ If the test prompts for input (some ART tests do) — answer with the default. C
 index=mydfir-project source="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational"
 EventCode=1 Image="*\\powershell.exe" CommandLine="*EncodedCommand*"
 earliest=-15m
-| table _time, ComputerName, User, Image, CommandLine, ParentImage, ParentCommandLine
+| table _time, host, User, Image, CommandLine, ParentImage, ParentCommandLine
 ```
 
 Expected: at least one row with `CommandLine` containing the full `powershell.exe -EncodedCommand <base64-blob>` and `ParentImage` showing the ART runner's process (typically `powershell.exe` or `pwsh.exe` from the ART invocation).
@@ -837,7 +837,7 @@ Expected: the dev event from Task 4.1 plus any other recent powershell.exe spawn
 index=mydfir-project source="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational"
 EventCode=1 Image="*\\powershell.exe"
 earliest=-15m
-| regex CommandLine="(?i)\s-(en?c|encodedcommand)\s"
+| regex CommandLine="(?i)\s-e[ncodedommand]*\s"
 ```
 
 **SPL annotation:**
@@ -854,9 +854,9 @@ Expected: count drops sharply — the dev event survives, most innocuous Windows
 index=mydfir-project source="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational"
 EventCode=1 Image="*\\powershell.exe"
 earliest=-15m
-| regex CommandLine="(?i)\s-(en?c|encodedcommand)\s"
+| regex CommandLine="(?i)\s-e[ncodedommand]*\s"
 | stats count, values(CommandLine) as command_lines, values(ParentImage) as parents
-        by _time, ComputerName, User, Image
+        by _time, host, User, Image
 ```
 
 **SPL annotation:**
@@ -864,9 +864,9 @@ earliest=-15m
 - `count` — number of input rows in each group. (No alias = output column is named `count`.)
 - `values(CommandLine) as command_lines` — collect the *unique* values of `CommandLine` from each group into a multi-value field aliased `command_lines`. Useful when the same alert key may have multiple distinct CommandLines.
 - `values(ParentImage) as parents` — same for parent process. **`ParentImage` is the high-signal column** for triage — `winword.exe` or `outlook.exe` parents would scream "phishing macro launched PowerShell"; `cmd.exe` from an admin user is benign.
-- `by _time, ComputerName, User, Image` — group by (timestamp + host + user + image path). Each unique combination becomes one output row.
+- `by _time, host, User, Image` — group by (timestamp + host + user + image path). Each unique combination becomes one output row.
 
-Expected: one row per unique (`_time`, `ComputerName`, `User`, `Image`) combination — typically just one row from the dev event. `command_lines` shows the encoded-command CommandLine; `parents` shows the ART runner.
+Expected: one row per unique (`_time`, `host`, `User`, `Image`) combination — typically just one row from the dev event. `command_lines` shows the encoded-command CommandLine; `parents` shows the ART runner.
 
 - [ ] **Step 4: [Either] Sanity-check the SPL across `Last 24 hours`**
 
@@ -1057,7 +1057,7 @@ Note the wall-clock timestamp.
 index=mydfir-project source="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational"
 EventCode=1 Image="*\\powershell.exe" CommandLine="*EncodedCommand*"
 earliest=-5m
-| table _time, ComputerName, User, Image, CommandLine, ParentImage
+| table _time, host, User, Image, CommandLine, ParentImage
 ```
 
 Expected: one row from this run (plus older dev runs if Last 24 hours is in scope).
@@ -1402,9 +1402,9 @@ Saved-search-to-fire delay: bounded by the 5-minute cron tick. Worst case ~5 min
 ```spl
 index=mydfir-project source="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational"
 EventCode=1 Image="*\\powershell.exe"
-| regex CommandLine="(?i)\s-(en?c|encodedcommand)\s"
+| regex CommandLine="(?i)\s-e[ncodedommand]*\s"
 | stats count, values(CommandLine) as command_lines, values(ParentImage) as parents
-        by _time, ComputerName, User, Image
+        by _time, host, User, Image
 ```
 
 | Clause | What it does |
@@ -1415,8 +1415,8 @@ EventCode=1 Image="*\\powershell.exe"
 | `Image="*\\powershell.exe"` | Match any path ending in `powershell.exe`. `\\` escapes the backslash. |
 | `\| regex CommandLine="..."` | Filter rows whose `CommandLine` matches a regex. Stricter than wildcard match. |
 | `(?i)` | Case-insensitive flag. |
-| `\s-(en?c\|encodedcommand)\s` | Whitespace-bounded match for `-e`, `-en`, `-enc`, or `-encodedcommand`. The `?` makes `n` optional. |
-| `\| stats count, values(CommandLine) as command_lines, values(ParentImage) as parents by _time, ComputerName, User, Image` | Aggregate to one row per (timestamp, host, user, image), counting hits and collecting unique CommandLines + parents per group. |
+| `\s-e[ncodedommand]*\s` | Whitespace-bounded match for `-e` followed by zero or more letters from `{n,c,o,d,e,m,a}`. Catches PowerShell's prefix-shortenings of `-EncodedCommand` (`-e`, `-en`, `-enc`, `-encod`, `-encodedcommand`, etc.) while rejecting unrelated flag-shaped fragments like `-eq` (q is not in the alphabet). |
+| `\| stats count, values(CommandLine) as command_lines, values(ParentImage) as parents by _time, host, User, Image` | Aggregate to one row per (timestamp, host, user, image), counting hits and collecting unique CommandLines + parents per group. |
 
 **ParentImage is the high-signal column for triage** — `winword.exe` or `outlook.exe` parents indicate phishing-macro-launched PowerShell; `cmd.exe` from an admin user is benign.
 
@@ -1570,7 +1570,7 @@ High-frequency Sysmon fields the SwiftOnSecurity config populates and Splunk Add
 |---|---|
 | `_time` | Splunk-assigned event timestamp (parsed from Sysmon's UTC stamp). |
 | `EventCode` | The Sysmon event type (1, 3, 7, ...). |
-| `ComputerName` | The Windows host the event originated from. |
+| `host` | The Windows host the event originated from. |
 | `User` | Account context the process ran under (e.g., `WIN10VM\admin`). |
 | `Image` | Full path to the executable. |
 | `CommandLine` | Command-line string the process was invoked with. |
@@ -1620,7 +1620,7 @@ Then in Splunk:
 ```spl
 index=mydfir-project source="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational"
 EventCode=1 Image="*\\notepad.exe" earliest=-5m
-| table _time, ComputerName, User, Image, CommandLine, ParentImage
+| table _time, host, User, Image, CommandLine, ParentImage
 ```
 
 Expected: at least one row within ~60 seconds.
@@ -1871,7 +1871,7 @@ Get-Service SplunkForwarder    # Status: Running expected
 ```spl
 index=mydfir-project source="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational"
 EventCode=1 Image="*\\notepad.exe" earliest=-5m
-| table _time, ComputerName, User, Image, CommandLine
+| table _time, host, User, Image, CommandLine
 ```
 
 Expected: ≥1 row within 60 seconds.
@@ -2004,7 +2004,7 @@ Seven starter queries for the everyday "I ran something on the Windows VM, what 
 ```spl
 index=mydfir-project source="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational"
 EventCode=1 earliest=-15m
-| table _time, ComputerName, User, Image, CommandLine, ParentImage
+| table _time, host, User, Image, CommandLine, ParentImage
 | sort -_time
 ```
 
@@ -2018,7 +2018,7 @@ EventCode=1 earliest=-15m
 ```spl
 index=mydfir-project source="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational"
 EventCode=3 earliest=-15m
-| table _time, ComputerName, User, Image, DestinationIp, DestinationPort
+| table _time, host, User, Image, DestinationIp, DestinationPort
 | sort -_time
 ```
 

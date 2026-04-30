@@ -248,9 +248,9 @@ The query, then per-clause annotation:
 ```spl
 index=mydfir-project source="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational"
 EventCode=1 Image="*\\powershell.exe"
-| regex CommandLine="(?i)\s-(en?c|encodedcommand)\s"
+| regex CommandLine="(?i)\s-e[ncodedommand]*\s"
 | stats count, values(CommandLine) as command_lines, values(ParentImage) as parents
-        by _time, ComputerName, User, Image
+        by _time, host, User, Image
 ```
 
 | Clause | What it does |
@@ -263,7 +263,7 @@ EventCode=1 Image="*\\powershell.exe"
 | `regex CommandLine="..."` | The `regex` command filters events whose CommandLine field matches a regular expression. Stricter than wildcard `*-enc*` matching because it anchors on PowerShell's actual flag syntax. |
 | `(?i)` | Inline regex flag — case-insensitive matching. PowerShell's parser is case-insensitive for flag names. |
 | `\s-(en?c\|encodedcommand)\s` | Whitespace-boundary on both sides; matches `-e`, `-en`, `-enc`, or `-encodedcommand` as a flag (not as a substring of some other word). The `?` makes the `n` optional. |
-| `\| stats count, values(...) as ... by ...` | The aggregation stage. `count` counts matching events; `values(field) as alias` collects unique values of `field` into a multi-valued column named `alias`; `by _time, ComputerName, User, Image` groups results by those fields. |
+| `\| stats count, values(...) as ... by ...` | The aggregation stage. `count` counts matching events; `values(field) as alias` collects unique values of `field` into a multi-valued column named `alias`; `by _time, host, User, Image` groups results by those fields. |
 
 **What the analyst sees:** for each (timestamp, host, user, image) bucket, a count of encoded-PowerShell events plus the unique CommandLines and parent processes that fired. ParentImage is the high-signal column — `winword.exe` or `outlook.exe` would scream "phishing macro launched PowerShell," while `cmd.exe` from a logged-in admin user is benign.
 
@@ -476,7 +476,7 @@ Splunk POSTs a JSON object to the v2 production webhook URL. Approximate shape (
 {
   "result": {
     "_time": "2026-04-30T18:42:13",
-    "ComputerName": "WIN10VM",
+    "host": "WIN10VM",
     "User": "WIN10VM\\...",
     "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
     "count": "1",
@@ -666,3 +666,35 @@ These corrections were applied during D1 implementation when Phase 0 surfaced re
 The pre-existing `inputs.conf` also has `source =` overrides on the `Microsoft-Windows-PowerShell/Operational` and `Microsoft-Windows-Windows Defender/Operational` stanzas — overrides that hadn't taken effect because the forwarder hadn't been restarted since the 2026-04-25 edit. D1's Phase 2 restart activates them as a side effect: those channels' `source` field values in Splunk lose the `WinEventLog:` prefix.
 
 **Vault grep (2026-04-30) confirmed zero downstream consumers** of the old (`WinEventLog:Microsoft-Windows-PowerShell/Operational`, `WinEventLog:Microsoft-Windows-Windows Defender/Operational`) source strings — no breakage. Phase 8's `splunk.md` update notes the change in passing for any future search/dashboard work.
+
+### E4: SPL regex broadened — match `-e`, `-en`, `-enc`, plus full `-EncodedCommand`
+
+**Original spec text** (§ 2.5 SPL clause): `regex CommandLine="(?i)\s-(en?c|encodedcommand)\s"`
+
+**Corrected:** `regex CommandLine="(?i)\s-e[ncodedommand]*\s"` — applied via global replace.
+
+**Why:** Phase 4 ran `Invoke-AtomicTest T1059.001 -TestNumbers 15` (the chosen worked-example test — see E6 below). The actual `CommandLine` Sysmon captured was `powershell.exe -NoProfile -E <base64>` — using PowerShell's bare `-E` form. The original regex required at least `-ec` or `-enc` (the `n?` makes the `n` optional, but the `c` is mandatory) and would have produced **zero hits** against the real test event.
+
+The corrected regex matches `-e` plus any sequence of letters drawn from the alphabet `{n,c,o,d,e,m,a}` (the letters in "ncodedcommand"). This catches all of PowerShell's valid prefix-shortenings (`-e`, `-en`, `-enc`, `-encod`, `-encoded`, `-encodedc`, etc., up to the full `-encodedcommand`) while rejecting false positives like `-eq`, `-ed`, `-ep` because those continue with letters not in the alphabet.
+
+**Trade-off:** the alphabet-based matcher accepts a few non-PowerShell-valid fragments like `-eee` or `-em` if they ever appear in a `powershell.exe` CommandLine — but those are vanishingly rare in practice. If a future false-positive is observed, narrow to a strict prefix-of-`encodedcommand` match: `\s-e(n(c(o(d(e(d(c(o(m(m(a(n(d)?)?)?)?)?)?)?)?)?)?)?)?)?\s`.
+
+### E5: Group-by field rename — `host` not `ComputerName`
+
+**Original spec text** (multiple sections): `by _time, ComputerName, User, Image` and `| table _time, ComputerName, User, Image, ...`
+
+**Corrected:** `by _time, host, User, Image` (and the corresponding `| table` lines) — applied via global replace.
+
+**Why:** the Splunk Add-on for Microsoft Sysmon (installed during Phase 0 — see E1) populates the `host` field with the originating Windows hostname; it does **not** populate `ComputerName`. Verified during Phase 4 SPL development: piping a known event through `| stats by ComputerName` yielded an empty grouping field, while `| stats by host` returned `DESKTOP-VNEF7PC` correctly.
+
+The Sysmon component page (Phase 8 `vault/architecture/components/sysmon.md`) Field Reference table is also updated to mark `host` (not `ComputerName`) as the canonical hostname field for Sysmon events under this Splunk add-on.
+
+### E6: T1059.001 test number — Test 15, not Test 2
+
+**Original spec text** (§ 3.1, § 3.4): "ART Test 2 of T1059.001"; "Test 2 is the working assumption."
+
+**Corrected:** **Test 15** ("ATHPowerShellCommandLineParameter -EncodedCommand parameter variations") — applied during Phase 3's catalog inspection.
+
+**Why:** the spec acknowledged Test 2 as a "working assumption" pending Phase 0 verification. Phase 3 inspected the actual atomics catalog (commit pulled 2026-04-30, 22 tests for T1059.001) and Test 2 turned out to be "Run BloodHound from local disk" — wrong technique. The right test for D1's worked-example is **T1059.001-15** (the `ATHPowerShellCommandLineParameter -EncodedCommand parameter variations` test). The `ATH` prefix marks it as an Atomic Test Harness synthetic — benign payload (decodes to `Write-Host <test-guid>`), no external dependencies, no user prompts, well-defined cleanup.
+
+The worked-example detection page in `vault/detections/t1059-001-powershell-encoded.md` references Test 15 as the canonical D1 worked example.

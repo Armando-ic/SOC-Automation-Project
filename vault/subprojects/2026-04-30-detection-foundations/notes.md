@@ -259,6 +259,73 @@ The spec.md and plan.md "Test 2" placeholders should be updated to "Test 15" dur
 - `scripts/d1_phase3_art_locate.py` — diagnostic helper that scans common module roots and `$env:PSModulePath`. Used to find where Red Canary's installer landed the module.
 - `scripts/d1_phase3_art_verify.py` — imports the module by full `.psd1` path, confirms atomics inventory, dumps `Invoke-AtomicTest T1059.001 -ShowDetailsBrief`. Re-runnable as the "is ART working?" smoke test.
 
+## Phase 4 captures (2026-04-30) — SPL development
+
+### Real T1059.001-15 event captured
+
+After running `Invoke-AtomicTest T1059.001 -TestNumbers 15 -GetPrereqs` then `... -TestNumbers 15`:
+
+| field | value |
+|---|---|
+| `_time` | 2026-04-30 18:01:47.695 UTC |
+| `host` | `DESKTOP-VNEF7PC` |
+| `User` | `DESKTOP-VNEF7PC\mydfir` |
+| `Image` | `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe` |
+| `CommandLine` | `powershell.exe -NoProfile -E VwByAGkAdABl...AAyADAAOQAAAA==` |
+| `ParentImage` | `C:\Windows\System32\wbem\WmiPrvSE.exe` |
+| `ProcessId` | `4496` |
+| `Hashes` | `MD5=2E5A8590CF6848968FC23DE3FA1E25F1, SHA256=9785001B0DCF755EDDB8AF294A373C0B87B2498660F724E76C4D53F9C217C7A3, IMPHASH=3D08F4848535206D772DE145804FF4B6` |
+
+Indexing lag for the dev event: ~5 seconds (event timestamp 18:01:47, observable in Splunk by ~18:01:52).
+
+### Spec Open Q5 answered: Hashes field IS populated
+
+The spec flagged whether `Hashes` would be populated for `powershell.exe` under SwiftOnSecurity's `<HashAlgorithms>` block. **Confirmed: yes.** All three algorithms (MD5, SHA256, IMPHASH) are populated. This is what the worked-example page records.
+
+### Forensic-interesting tell: ParentImage = `WmiPrvSE.exe`
+
+ATH Test 15 uses WMI as the launch mechanism, so `ParentImage` is `WmiPrvSE.exe` (Windows Management Instrumentation Provider). For real attacks, common `ParentImage` values to flag:
+
+- `winword.exe` / `excel.exe` / `outlook.exe` → phishing-macro launched PowerShell
+- `cmd.exe` from interactive logon → manual analyst use, usually benign
+- `wscript.exe` / `cscript.exe` → scripted attack chain
+- `WmiPrvSE.exe` → WMI-launched (could be lateral movement OR a synthetic test like ATH)
+- Unknown / non-system parent → very suspicious
+
+This pattern goes into the worked-example page's "Notes" section.
+
+### SPL iteration — what each clause demonstrably did
+
+Querying Splunk's `/services/search/jobs/export` endpoint with progressive filter widening:
+
+| Step | SPL pipeline | Hits in last 15m |
+|---|---|---|
+| 1 (broad) | `index=mydfir-project source="XmlWinEventLog:..." EventCode=1 Image="*\\powershell.exe"` | 35 |
+| 2 (+regex) | `... \| regex CommandLine="(?i)\s-e[ncodedommand]*\s"` | **1** |
+| 3 (final) | `... \| stats count, values(CommandLine) as command_lines, values(ParentImage) as parents by _time, host, User, Image` | 1 row |
+
+The Step 1→2 transition is the value of the regex clause: it cuts 35 generic powershell.exe events down to the 1 that's actually using `-EncodedCommand` (any prefix form).
+
+### Final SPL (verified working against a real ART event)
+
+```spl
+index=mydfir-project source="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational"
+EventCode=1 Image="*\\powershell.exe"
+| regex CommandLine="(?i)\s-e[ncodedommand]*\s"
+| stats count, values(CommandLine) as command_lines, values(ParentImage) as parents
+        by _time, host, User, Image
+```
+
+### Two corrections to spec/plan SPL the iteration revealed
+
+1. **Regex broadening.** The spec wrote `(?i)\s-(en?c|encodedcommand)\s` — matches `-ec`, `-enc`, `-encodedcommand`. **Misses `-e` and `-en`**, the two shortest valid PowerShell shortenings of `-EncodedCommand`. Real ATH Test 15 uses `-E`, so the spec's regex would have produced zero hits.
+
+   **Updated regex:** `(?i)\s-e[ncodedommand]*\s` — matches `-e` plus zero-or-more letters from the alphabet `{n,c,o,d,e,m,a}`. Catches all valid PowerShell prefix-shortenings of `-EncodedCommand` (`-e`, `-en`, `-enc`, `-encod`, `-encodedcommand`, etc.) while rejecting unrelated `-eq`, `-ed`, `-em` flag-shaped substrings (because those continue with letters NOT in the alphabet, *but* wait `-em` does match — `-em` is allowed because `e` and `m` are both in the set... actually that's a small false-positive risk; `-em` isn't a real PowerShell.exe flag so it's effectively benign; if it ever becomes a problem, narrow to `-e(n(c(o(d(e(d(c(o(m(m(a(n(d)?)?)?)?)?)?)?)?)?)?)?)?)?` for an exact-prefix-of-`encodedcommand` match).
+
+2. **Group-by field rename.** Spec used `by _time, ComputerName, User, Image`. The Splunk Add-on for Microsoft Sysmon's parsing populates `host`, not `ComputerName`. **Use `host`** in the `by` clause. (`ComputerName` returned as empty/null when piped through `stats by ComputerName`.)
+
+Both corrections are reflected in the Phase 4 final SPL above. The spec/plan are not edited inline — the Errata section tracks the divergence post-hoc; the worked-example detection page in `vault/detections/` will carry the corrected SPL as the canonical reference.
+
 ## Open follow-ups
 
 - Confirm Universal Forwarder service uptime > a few seconds (was the restart already performed by something else?). If `(Get-Date) - (Get-Process splunkd).StartTime` shows a process younger than the inputs.conf LastWriteTime, the restart already happened and we can skip Phase 2 Task 2.2 Step 3.
