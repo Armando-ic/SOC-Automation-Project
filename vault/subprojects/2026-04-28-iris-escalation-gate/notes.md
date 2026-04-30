@@ -363,6 +363,45 @@ Iris alerts #30-#44 created during Tests 1-5 and debug iterations. Iris cases #2
 
 All five gate paths verified end-to-end with pinned data. Workflow ready for Phase 11 (Splunk webhook cutover to v2).
 
+### Post-recovery verification (after Iris restart)
+
+Once the Iris VM came back up, ran two API queries to definitively confirm Test 3/4/5 left no residue:
+
+```
+GET /alerts/filter?alert_ids=44 → alert #44 exists with case_id=[]    ✓
+GET /manage/cases/list          → highest case is #10 (from alert #41) ✓
+```
+
+No case was created from alerts #42 (Test 3 deny), #43 (Test 4 timeout), or #44 (Test 5 escalate-fail). All three remained in the alert queue exactly as the gate design intends.
+
+### Two operational gotchas surfaced during Iris recovery
+
+**1. Docker port-forwarding can stick broken after a hard VM stop.**
+
+When the user brought the Iris VM back up after Test 5 (deliberate hard stop), `docker-compose ps` showed all five containers "Up" and `iriswebapp_nginx` reporting "Up (healthy)" — nginx was even successfully serving its in-container localhost healthcheck (`127.0.0.1 ... GET / HTTP/1.1 302` every 5s, visible in nginx access log). But host-level curl to `https://localhost/` hung 10s with HTTP 000, and external curl from the SOC host got TCP timeouts despite ICMP working and `ss -tulpn` showing `docker-proxy` bound to `0.0.0.0:443`.
+
+Root cause: stale iptables NAT rules in the host network namespace from the abrupt stop. Fix:
+
+```bash
+cd ~/iris-web
+sudo docker-compose down    # tears down docker network + NAT rules
+sudo docker-compose up -d   # fresh network + fresh NAT rules
+```
+
+`down` does not remove volumes (no `-v` flag), so postgres data including alert #44 survived.
+
+**Implication for runbook (Phase 12):** the standard "Iris won't come back up after VM stop" recovery is `down` then `up -d`, not just `up -d`. The "Up (healthy)" state from `compose ps` is misleading — it reflects in-container nginx healthchecks and says nothing about whether host:container port forwarding is actually working. Always confirm with a host-side curl, not just compose status.
+
+**2. Cosmetic Unicode mangling in `Build Escalate Body` case_title.**
+
+Iris case #10's name came back as `[ALERT #41] Test-Brute-Force-External � high` — the em-dash (`—`) in the `Build Escalate Body` Code node's case_title template literal was mangled to a replacement char somewhere between n8n's Code editor and Iris's database.
+
+The current `Build Escalate Body` Code node uses a raw em-dash literal in the case_title template. The fix is to apply the rule already documented in this notes file under "Phase 3 Code node — Unicode encoding lesson (rediscovered)": replace the literal em-dash with the JS Unicode escape sequence (backslash, lowercase u, 2014). See the existing escape reference table earlier in this file for the BMP-vs-supplementary-plane variants.
+
+Cosmetic only — the case still works; only the title display is affected. Defer fix to a Phase 12 cleanup commit. The Phase 0/3 generalized rule ("ASCII source, escape all user-visible Unicode in JS source") was originally discovered while building `Extract Triage Result`; `Build Escalate Body` was added later in Phase 10's Pattern H saga and didn't get the same treatment.
+
+(Meta note: writing this section also surfaced that the SAME mangling can happen at Claude Code's tool-call JSON layer — the `—` escape gets interpreted into a literal em-dash before reaching the file. Workaround when documenting: describe the escape by rule reference rather than embedding the literal escape sequence inline; or double-escape the backslash in the tool input. The lesson's scope expands: Unicode escapes can be silently re-interpreted at any tool/transport boundary, not just clipboard paste.)
+
 ---
 
 ## 2026-04-29 (impl) — Phase 6 verified + Phase 0.2 answered live
