@@ -371,6 +371,118 @@ curl -sk -u mydfir:<pw> -X POST \
 
 The saved search landed in the `search` app (Splunk's default Search & Reporting app), not in a custom `mydfir-project` app. This is fine — the search is `Shared in App`, so visible to all `search`-app users on this Splunk instance. All admin users (incl. `mydfir`) are in the search app by default. Spec § 2.6 didn't constrain the app; the runbook should note "search app" as the location.
 
+## Phase 6 captures (2026-04-30) — Tier-2 live-fire validation
+
+### Outcome A confirmed end-to-end
+
+The saved search fired once via Splunk cron at **15:25:16 EDT (= 19:25:16 UTC)**, the moment after I successfully POST'd `is_scheduled=true` to the saved-search REST endpoint. Subsequent observation:
+
+**Iris alert #51** auto-created via the v2 production webhook → n8n SOC Triage v2 → Iris pipeline:
+
+| field | value |
+|---|---|
+| `alert_id` | 51 |
+| `alert_title` | `T1059.001 - PowerShell Encoded Command` |
+| `alert_severity_id` | 1 (`info`) — see severity-mapping note below |
+| `alert_status_id` | 1 (`new`) |
+| `iocs count` | **0** (confirms Outcome A — gate-skipped) |
+| `alert_creation_time` | 2026-04-30T19:25:16.771073 UTC |
+| `alert_source_event_time` | 2026-04-30T19:25:16.671353 UTC |
+
+Claude's triage rendered into Iris's `alert_description`:
+
+> **Summary:** PowerShell on DESKTOP-VNEF7PC executed an encoded (-E) command spawned by WmiPrvSE.exe under user DESKTOP-VNEF7PC\\mydfir. Decoded payload (UTF-16 LE base64) is benign: `Write-Host 5ee4ffb4-f13f-4b52-a4b7-64502faf1209` — appears to be a test/canary or beacon-style probe rather than malicious code. The parent (WMI Provider Host) is the more notable indicator, suggesting WMI was used as the execution vector.
+>
+> **Severity:** medium — The decoded command itself is harmless (Write-Host of a GUID), which on its own would be low. However, two characteristics elevate concern: (1) use of base64-encoded PowerShell (-E) is a common defense-evasion technique, and (2) the parent process is WmiPrvSE.exe, indicating execution via WMI — a frequent lateral movement / remote execution vector. This pattern matches red-team tooling probes (e.g., Atomic Red Team, Impacket wmiexec test commands). Without corroborating malicious activity, medium is appropriate; escalate to high if additional WMI-spawned PowerShell follows.
+>
+> **MITRE Techniques:** T1059.001 (PowerShell), T1027 (Obfuscated Files or Information), T1047 (Windows Management Instrumentation)
+>
+> **Enriched IOCs:** _none_
+>
+> **Recommended Actions:** _none_
+>
+> **Investigation Notes:** _none_
+
+Claude **decoded the base64 payload independently** (as Outcome B would predict) — but found nothing IOC-shaped inside the decoded `Write-Host <GUID>`, so `iocs_enriched` came back empty. The gate IF saw `iocs.length == 0` and routed to the FALSE branch. **Outcome A path validated** (matches A2 Test 1 pattern on Sysmon-shaped data) — and as a bonus, also demonstrated Claude's decoding capability on real encoded-PowerShell payloads.
+
+### Architectural promise validated
+
+This proves the spec's central promise (§ 2.7): **a Sysmon-shaped alert can traverse the existing SOC Triage v2 pipeline with no n8n changes.** A1's `Extract Triage Result` Code node accepted Claude's response cleanly, A1's `Create Iris Alert` HTTP node produced alert #51 with HTTP 2xx, A2's `Has Malicious IOCs?` IF gate took the FALSE branch on the empty `iocs` array, A2's plain-Slack-post path executed.
+
+No system-prompt addendum was needed (the standby fix from spec § 2.7 stays as standby, not applied).
+
+### Severity mapping discrepancy — flagged for follow-up
+
+Claude's triage explicitly says **"Severity: medium"** in its narrative, but the Iris `alert_severity_id` was stored as **1 (info)**. The expected mapping per A1's schema (and the Iris severity catalog: 1=info, 2=low, 3=medium, 4=high, 5=critical) means a Claude-stated `medium` should land as `3`. Two possibilities:
+
+1. **Claude returned `severity: "info"` in the structured response** and only used "medium" as descriptive text in the human-prose narrative. (This would mean A1's prompt is producing inconsistent severity signals — the structured field doesn't match the prose. Worth investigating in a follow-up — maybe a system-prompt clarification.)
+2. **A1's `Extract Triage Result` Code node is silently defaulting to 1** when the parsing fails or the value is unexpected. (Would mean a regression — A1's Phase 11 verification didn't catch this.)
+
+Either way, **flagged for D1.5 / A3 era investigation**. Doesn't block D1 closeout — the gate-skipped path is what the spec required to validate, and that worked. Captured here as an open follow-up.
+
+### Spec Open Q4 answered: webhook payload schema verification
+
+The successful Iris alert creation IS the answer to Q4 — the v2 webhook accepted the saved-search payload from Splunk and Claude triaged it cleanly. Concrete payload-shape capture is left for the next Phase 6.4 dedup run, which will inspect the n8n execution UI directly with the user.
+
+### Saved-search scheduling gotcha (compounding the Phase 5 digest_mode gotcha)
+
+After Phase 5's `digest_mode=1 → 0` correction, the saved search's `is_scheduled` field kept flipping back to `False` every time I re-queried. Diagnosed at Phase 6 entry: when the saved search has `realtime_schedule = True` (Splunk's default for newly-created scheduled alerts), and you POST a value-update without re-asserting `realtime_schedule`, Splunk's scheduler de-prioritizes the search and `is_scheduled` ends up False on the next read.
+
+**Fix:** explicitly POST `realtime_schedule=false` together with `is_scheduled=true`. Verified working — saved search now reports `next_scheduled_time = 2026-04-30 21:25:00 UTC` after the joint update.
+
+The Splunk web UI's "Schedule" dropdown for alerts has two values: `Run on Cron Schedule` (= `realtime_schedule=False`) and `Run on Real-Time Schedule` (= `realtime_schedule=True`). The "Real-Time Schedule" option is for performance-sensitive workloads where Splunk pulls events from a sliding window in memory — not appropriate for our `Last 24 hours` window. **Runbook should document `Run on Cron Schedule` as the required setting.**
+
+### Manual dispatch did not fire alert actions
+
+When I dispatched the saved search via `POST /saved/searches/<name>/dispatch -d "trigger_actions=1"`, the search ran and returned 1 result, but `performance.alertActionsHandler.duration='-'` indicates the alert action handler did NOT run. The webhook was therefore not POST'd to n8n. This is a Splunk REST API quirk — manual dispatches sometimes don't trigger alert actions even with `trigger_actions=1`.
+
+**Implication for Phase 6.4 (dedup verification):** can't rely on manual REST dispatch as a substitute for cron firing. The cron must be working, which it now is post-`realtime_schedule=false` fix. Phase 6.4 will run a fresh ART invocation and wait for the next */5 cron tick.
+
+### Phase 6.4 — Cross-tick dedup verification (FOUND a real spec-divergence)
+
+After fixing the scheduling at 17:23 EDT, ran T1059.001-15 a second time (TestGuid `3bdda376-e537-4709-90b8-f8c75558e4be`, Sysmon `_time=2026-04-30 19:56:48.911 UTC`, separate event from Phase 4's `5ee4ffb4-...` at `_time=2026-04-30 18:01:47.695 UTC`). At the next cron tick (21:25:00 UTC = 17:25 EDT), Splunk produced **alert #52** in Iris.
+
+The expected behavior (per spec § 2.6 + § Risks): "For each result" + 24h `alert.expires` gives content-hash dedup, so at 21:25 UTC:
+- Phase 4 row: hash already triggered alert #51 → SKIP.
+- Phase 6.4 row: new hash → fire one webhook.
+- Alert #52 should describe Phase 6.4 (GUID `3bdda376-...`).
+
+**Actual behavior:** alert #52 describes Phase 4 (GUID `5ee4ffb4-...`, the SAME event as alert #51). Phase 6.4 produced no alert at all. The manually-run SPL with the same `-24h@h` window confirmed both rows are in scope (2 rows total).
+
+This means **Splunk's "For each result" trigger with `alert.suppress=False` does NOT dedupe across cron ticks the way the spec assumed.** What it actually does:
+
+- Each scheduled cron tick fires the alert action **once** (not once per row).
+- The webhook payload carries one `result` object — Splunk picks one row from the search result set (apparently the first / oldest by `_time`).
+- Across cron ticks, the SAME event's row triggers the action again on subsequent ticks (no automatic dedup).
+- `alert.expires=24h` controls how long Splunk's Triggered Alerts dashboard retains the trigger record, NOT cross-tick dedup.
+
+**Spec § Risks row that's now resolved:** the entry "Splunk's 'For each result' hash-dedup behaves differently for Sysmon-shaped result rows than for brute-force-shaped result rows" was based on a misreading of Splunk's behavior. The real-behavior is: there is no automatic content-hash dedup in this configuration; the spec's fallback ("narrow Time Range to a smaller window e.g. `Last 5 minutes`, or add throttle") is the correct production fix.
+
+**For D1, this is acceptable:** the worked example fires duplicates per cron tick as long as a matching event is in the 24h window. That's noisy but architecturally fine — the duplicates flow through the gate-skipped path each time, no IOCs, no cases, just Slack-noise. Production tuning is a post-D1 task.
+
+**Three follow-up options for the runbook to call out:**
+
+1. **Narrow the Time Range to `Last 5 minutes`** so each cron tick only sees events from the prior cron interval. Eliminates duplicates structurally but loses the "wide look-back for late-indexed events" property.
+2. **Set `alert.suppress=True` with `alert.suppress.fields=_time,host,Image,CommandLine`** — Splunk's true cross-tick dedup. Most general; takes effect immediately.
+3. **Accept duplicates for the lab.** D1's worked example is a learning loop, not a production detection. Ramping up to many techniques would force decision (1) or (2).
+
+**Recommendation:** Option 2 (`alert.suppress`) for any production detection in this lab. Option 3 stays the D1 default for educational consistency with the brute-force search precedent.
+
+### Phase 6 closeout: PASS with caveats
+
+**Architectural promise** (Sysmon-shaped alert traverses A2's Test 1 path on real production traffic with no n8n changes): **VALIDATED** by alert #51's clean end-to-end flow.
+
+**Outcome A** (gate-skipped path, plain Slack post): **VALIDATED** — both alerts #51 and #52 have iocs=[].
+
+**Bonus discovery — Outcome B characteristic:** Claude *did* decode the base64 payload independently in both alerts (extracted the `Write-Host <GUID>` text). It just didn't find anything IOC-shaped inside, so iocs_enriched stayed empty. The base64-decoding capability is "free" without prompt changes — D1.5 hook is unnecessary as a prompt-engineering project for this technique class.
+
+**Validation gaps captured for future runbook:**
+
+- Splunk's "For each result" + `alert.suppress=False` cross-tick dedup behavior (spec assumption was wrong; documented above).
+- Severity stamping: Claude's narrative says "medium" or "high" but the structured `severity_id` values were 1 (alert #51) and 5 (alert #52). Inconsistency between Claude's prose and the structured field; flagged for D1.5/A3 era investigation.
+- Saved-search scheduling: needs `realtime_schedule=false` explicitly set; default `True` from "Save As Alert" wizard caused `is_scheduled` to silently flip back to False after configuration changes (Splunk 10.2.2 quirk; documented above).
+- Manual REST dispatch with `trigger_actions=1` does NOT reliably fire alert actions on Splunk 10.2.2 — even when the search returns matching results. Only cron-driven dispatches fired the webhook in this session.
+
 ## Open follow-ups
 
 - Confirm Universal Forwarder service uptime > a few seconds (was the restart already performed by something else?). If `(Get-Date) - (Get-Process splunkd).StartTime` shows a process younger than the inputs.conf LastWriteTime, the restart already happened and we can skip Phase 2 Task 2.2 Step 3.
