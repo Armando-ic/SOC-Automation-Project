@@ -326,6 +326,51 @@ EventCode=1 Image="*\\powershell.exe"
 
 Both corrections are reflected in the Phase 4 final SPL above. The spec/plan are not edited inline — the Errata section tracks the divergence post-hoc; the worked-example detection page in `vault/detections/` will carry the corrected SPL as the canonical reference.
 
+## Phase 5 captures (2026-04-30)
+
+### Splunk saved search created
+
+User created the saved search via Splunk web UI (Search & Reporting → Save As → Alert), then verified state via Splunk REST `/servicesNS/-/-/saved/searches/T1059.001%20-%20PowerShell%20Encoded%20Command`:
+
+| Setting | Value |
+|---|---|
+| Name | `T1059.001 - PowerShell Encoded Command` |
+| App | `search` (default Splunk search app) |
+| Owner | `mydfir` |
+| Sharing | `app` (Shared in App) |
+| Disabled | False (enabled) |
+| is_scheduled | True |
+| cron_schedule | `*/5 * * * *` |
+| dispatch.earliest_time | `-24h@h` (Last 24 hours) |
+| alert_type | `number of events` |
+| alert_threshold | `0` |
+| alert_comparator | `greater than` |
+| alert.digest_mode | False (= For each result) |
+| alert.track | True (Add to Triggered Alerts) |
+| alert.severity | 5 (Severe) |
+| alert.expires | `24h` |
+| action.webhook | 1 (enabled) |
+| action.webhook.param.url | `http://192.168.129.132:5678/webhook/db7245f7-8451-4bea-b47d-f6ad35b818cd` |
+| Search SPL | (the verified-working SPL from Phase 4) |
+
+### Gotcha — `alert.digest_mode` defaulted to True (Once)
+
+The Splunk web UI's "Save As Alert" wizard defaults `Trigger` to "Once" (`alert.digest_mode=1`). For our pipeline integration we need "For each result" (`alert.digest_mode=0`) so each detected event becomes its own webhook payload (matching A2's Test 1 / Test 2 validation pattern; the n8n `Extract Triage Result` Code node expects per-result webhook payloads).
+
+In the GUI flow, the user must explicitly switch the radio button to **For each result** during the Trigger configuration step. If forgotten, fix via REST:
+
+```bash
+curl -sk -u mydfir:<pw> -X POST \
+  "https://192.168.129.131:8089/servicesNS/mydfir/search/saved/searches/T1059.001%20-%20PowerShell%20Encoded%20Command" \
+  --data-urlencode "alert.digest_mode=0"
+```
+
+(Done during Phase 5 — the initial save landed with digest_mode=True; corrected via REST. Future runbook GUI walkthroughs need to call out the radio-button selection explicitly.)
+
+### App scope note
+
+The saved search landed in the `search` app (Splunk's default Search & Reporting app), not in a custom `mydfir-project` app. This is fine — the search is `Shared in App`, so visible to all `search`-app users on this Splunk instance. All admin users (incl. `mydfir`) are in the search app by default. Spec § 2.6 didn't constrain the app; the runbook should note "search app" as the location.
+
 ## Open follow-ups
 
 - Confirm Universal Forwarder service uptime > a few seconds (was the restart already performed by something else?). If `(Get-Date) - (Get-Process splunkd).StartTime` shows a process younger than the inputs.conf LastWriteTime, the restart already happened and we can skip Phase 2 Task 2.2 Step 3.
