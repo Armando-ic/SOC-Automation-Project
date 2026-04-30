@@ -187,6 +187,78 @@ After seeding varied activity (notepad, calc, Invoke-WebRequest to google.com, f
 - `scripts/d1_phase2_uf_restart.py` — backup + restart + smoke-test-#1 seed (notepad spawn). Re-runnable.
 - `scripts/d1_phase2_seed_coverage.py` — varied-activity seed for smoke-test-#2. Re-runnable; cleans up after itself (deletes the temp file + registry key).
 
+## Phase 3 captures (2026-04-30)
+
+### ART install metadata
+
+| | |
+|---|---|
+| Module | `Invoke-AtomicRedTeam` v2.1.0 |
+| Module path | `C:\AtomicRedTeam\invoke-atomicredteam\Invoke-AtomicRedTeam.psm1` |
+| Atomics root | `C:\AtomicRedTeam\atomics\` |
+| Technique count | 334 |
+| Install command | `Install-AtomicRedTeam -getAtomics -Force` (after IEX-bootstrap of installer) |
+| TLS note | Forced `[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12` before bootstrap to ensure GitHub raw download works on Windows 10 |
+
+### Gotcha — module not on default PSModulePath
+
+Red Canary's installer puts the module under `C:\AtomicRedTeam\invoke-atomicredteam\` — **not** under any path in `$env:PSModulePath`. Default PSModulePath on this VM:
+
+```
+C:\Users\mydfir\Documents\WindowsPowerShell\Modules
+C:\Program Files (x86)\WindowsPowerShell\Modules
+C:\Program Files\WindowsPowerShell\Modules
+C:\Windows\system32\WindowsPowerShell\v1.0\Modules
+C:\Program Files (x86)\AutoIt3\AutoItX
+```
+
+`Import-Module Invoke-AtomicRedTeam` therefore fails. **Workarounds:**
+
+1. **Import by full path (used in our scripts):** `Import-Module C:\AtomicRedTeam\invoke-atomicredteam\Invoke-AtomicRedTeam.psd1 -Force`.
+2. **Add the path persistently (interactive runbook user pattern):**
+   ```powershell
+   [Environment]::SetEnvironmentVariable('PSModulePath', $env:PSModulePath + ';C:\AtomicRedTeam\invoke-atomicredteam', 'User')
+   ```
+   Then `Import-Module Invoke-AtomicRedTeam` works after restarting the shell.
+
+Runbook (Phase 9) will document workaround #2 as the recommended interactive pattern.
+
+### T1059.001 test catalog (22 tests as of atomics commit pulled 2026-04-30)
+
+```
+T1059.001-1   Mimikatz
+T1059.001-2   Run BloodHound from local disk
+T1059.001-3   Run Bloodhound from Memory using Download Cradle
+T1059.001-4   Mimikatz - Cradlecraft PsSendKeys
+T1059.001-5   Invoke-AppPathBypass
+T1059.001-6   Powershell MsXml COM object - with prompt
+T1059.001-7   Powershell XML requests
+T1059.001-8   Powershell invoke mshta.exe download
+T1059.001-10  PowerShell Fileless Script Execution
+T1059.001-11  NTFS Alternate Data Stream Access
+T1059.001-12  PowerShell Session Creation and Use
+T1059.001-13  ATHPowerShellCommandLineParameter -Command parameter variations
+T1059.001-14  ATHPowerShellCommandLineParameter -Command parameter variations with encoded arguments
+T1059.001-15  ATHPowerShellCommandLineParameter -EncodedCommand parameter variations          ← chosen for D1 worked example
+T1059.001-16  ATHPowerShellCommandLineParameter -EncodedCommand parameter variations with encoded arguments
+T1059.001-17  PowerShell Command Execution
+T1059.001-18  PowerShell Invoke Known Malicious Cmdlets
+T1059.001-19  PowerUp Invoke-AllChecks
+T1059.001-20  Abuse Nslookup with DNS Records
+T1059.001-21  SOAPHound - Dump BloodHound Data
+T1059.001-22  SOAPHound - Build Cache
+```
+
+**Spec drift correction:** the spec § 3.1 working assumption was "Test 2". In the current atomics, Test 2 is BloodHound — not encoded PowerShell. The right test for D1's worked example is **T1059.001-15** ("ATHPowerShellCommandLineParameter -EncodedCommand parameter variations"). The `ATH` prefix denotes Atomic Test Harness — a synthetic test designed for telemetry verification with a benign payload and well-defined cleanup. No external download dependencies, no Defender concerns (Defender is off anyway), no user-interaction prompts. Exactly the right fit.
+
+The spec.md and plan.md "Test 2" placeholders should be updated to "Test 15" during Phase 6 / Phase 7 catalog work, with the spec's Errata section noting this drift. Captured as a follow-up.
+
+### Phase 3 helper scripts
+
+- `scripts/d1_phase3_art_install.py` — bootstrap installer + `Install-AtomicRedTeam -getAtomics`. The Step C (Import-Module by name) inside this script fails because of the PSModulePath gotcha above; it's still the right "install" script, but follow-up verification is `d1_phase3_art_verify.py`.
+- `scripts/d1_phase3_art_locate.py` — diagnostic helper that scans common module roots and `$env:PSModulePath`. Used to find where Red Canary's installer landed the module.
+- `scripts/d1_phase3_art_verify.py` — imports the module by full `.psd1` path, confirms atomics inventory, dumps `Invoke-AtomicTest T1059.001 -ShowDetailsBrief`. Re-runnable as the "is ART working?" smoke test.
+
 ## Open follow-ups
 
 - Confirm Universal Forwarder service uptime > a few seconds (was the restart already performed by something else?). If `(Get-Date) - (Get-Process splunkd).StartTime` shows a process younger than the inputs.conf LastWriteTime, the restart already happened and we can skip Phase 2 Task 2.2 Step 3.
