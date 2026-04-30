@@ -15,6 +15,9 @@ splunk-mcp-main/**/__pycache__/
 splunk-mcp-main/**/.venv/
 splunk-mcp-main/**/uv.lock
 
+# Python bytecode under scripts/
+scripts/__pycache__/
+
 # OS / editor noise
 .DS_Store
 Thumbs.db
