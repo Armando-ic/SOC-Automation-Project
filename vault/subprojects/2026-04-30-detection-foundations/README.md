@@ -61,11 +61,11 @@ The **design driver** is job-prep — every D1 deliverable is something the user
 
 - [x] Brainstorm completed 2026-04-30
 - [x] Spec written 2026-04-30
-- [ ] Spec approved (user review gate)
-- [ ] Implementation plan written (next session, via writing-plans skill)
-- [ ] Implementation executed
-- [ ] Runbook written (during/after build)
-- [ ] Log entry closing D1
+- [x] Spec approved 2026-04-30 (with in-flight Errata E1-E6 capturing realities Phase 0 surfaced)
+- [x] Implementation plan written 2026-04-30
+- [x] Implementation executed 2026-04-30 (Phases 1-9; live-fire PASS, Outcome A confirmed)
+- [x] Runbook written 2026-04-30
+- [x] Log entry closing D1
 
 ## Predecessors
 
