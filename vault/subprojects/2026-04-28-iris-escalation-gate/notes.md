@@ -481,6 +481,18 @@ Cases #11 and #12 both came back with case names `... � high` instead of `... 
 
 Splunk saved search disabled after the e2e (otherwise it would have kept producing cases on every cron tick).
 
+### Em-dash bug — Phase 12 follow-up: not reproducing (2026-04-30)
+
+While verifying the Phase 12 e2e (case #13 from alert #50, full Approve path against the as-shipped v2 JSON), the cases list view in Iris UI showed cases #10, #11, #12, and #13 all rendering clean em-dashes in their case_titles — `[ALERT #50] Test-Brute-Force-External-Spoofed — high`. The Unicode replacement glyph reported during Phase 11 against cases #11/#12 did not reproduce.
+
+The repo JSON was already encoding the em-dash as a `—` JS escape (verified at byte level — the file contains `\\u2014` in JSON, which parses to `—` in the JS source string, which JS resolves to U+2014 at runtime). No edit to the JSON was needed for Phase 12 closure.
+
+Possible explanations for the original observation: (a) transient display issue on the original Iris UI surface (e.g., a different page that wasn't using a font with em-dash glyph coverage at the time); (b) misread of glyphs at a low resolution / wrong-font scenario; (c) intermediate n8n/Iris state that has since changed. None definitive.
+
+**Decision:** preserve the historical observation here, document the not-reproducing finding in [[runbook]]'s "Em-dash mangling (historical, not currently reproducing)" section, and ship A2 without a source-level ASCII fix. If the bug recurs, the runbook section has the diagnostic context.
+
+The Phase 0/3 Unicode encoding rule (ASCII source + `\u` escapes) is still a good practice for clipboard-paste hygiene into n8n's Code editor, regardless of this specific bug's reproduction status.
+
 A2's success criteria from the spec:
 
 | # | Criterion | Status |

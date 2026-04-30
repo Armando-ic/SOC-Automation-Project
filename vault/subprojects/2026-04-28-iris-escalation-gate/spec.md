@@ -1,9 +1,9 @@
 ---
-status: active
-updated: 2026-04-28
+status: complete
+updated: 2026-04-30
 sub_project: A2
 approach: Slack URL-button gate + alert→case escalation (Pattern Y from brainstorm)
-related: [[README]], [[../2026-04-27-structured-outputs/spec]], [[../../workflows/soc-triage-pipeline]], [[../../architecture/components/dfir-iris]], [[../../architecture/components/n8n]]
+related: [[README]], [[runbook]], [[notes]], [[../2026-04-27-structured-outputs/spec]], [[../../workflows/soc-triage-pipeline]], [[../../architecture/components/dfir-iris]], [[../../architecture/components/n8n]], [[../../decisions/0005-additive-ioc-type-schema-enhancement]]
 ---
 
 # Spec — Sub-project A2: Iris Escalation Gate
@@ -544,22 +544,67 @@ These are HOW questions to verify at task-step granularity, not WHAT questions f
 6. **Pinning Anthropic node response during downstream development** (same trick A1 used).
 7. **Credential carry-over on workflow re-import** (same gotcha A1 hit).
 
+## Errata (post-implementation corrections)
+
+Recorded against the as-shipped behavior. The spec above is preserved as the design-time record; this section flags where reality diverged from the design and where the runbook + dfir-iris.md component doc carry the authoritative current behavior.
+
+### E1 — `$json.timedOut` does not exist on the Wait node (Phase 6, 2026-04-29)
+
+Section 6a says: *"On timeout: continues with `$json.timedOut: true` (verify exact field name during Phase 0)."*
+
+Section 6c's table says timeout is detected by `{{ $json.timedOut }} is true`.
+
+Both are wrong. **The Wait node has no `timedOut` field in either output shape.** Verified live with execution #71 (timeout reduced to 30s for the test):
+
+| Wait result | Actual output |
+|---|---|
+| Webhook hit (Approve / Deny clicked) | `{ headers, params, query: { signature, decision }, body, webhookUrl, executionMode }` — n8n replaces the upstream item with the resume request's data |
+| Timeout | The upstream item passes through **unchanged** — Wait acts as a no-op pass-through. In our workflow that's the `Post Slack Alert + Approve/Deny` HTTP Request response object. No `timedOut` field, no special marker. |
+
+**Corrected `Decision?` Switch design (the as-shipped one):**
+
+| Branch | Condition | Output |
+|---|---|---|
+| `approve`  | `{{ $json.query.decision }} === 'approve'` | -> Escalate sub-flow |
+| `deny`     | `{{ $json.query.decision }} === 'deny'` | -> Deny Slack reply |
+| (fallback) | anything else (covers timeout, malformed query, missing query.decision) | -> Timeout Slack reply |
+
+The fallback branch is the **timeout-detection mechanism** in production. On timeout, `query.decision` is `undefined` because the Wait passed the upstream Slack response through (which has no `query` field at all), and the Switch's catch-all routes to the timeout reply. This collapses the spec's three-way + fallback (`timeout` / `approve` / `deny` / fallback) into a cleaner three-way (`approve` / `deny` / fallback-handles-timeout).
+
+This means **section 6c's table is superseded** by the table immediately above. Section 6c's "verify exact field name during Phase 0" caveat anticipated something like this; Phase 0 deferred the probe to Phase 6, where it surfaced inline.
+
+### E2 — Wait node "Respond Immediately" doesn't honor `responseData`/`responseHeaders` (Phase 6)
+
+Section 6b describes a custom HTML confirmation page returned to the analyst's browser. **The Wait node ignores the configured response body for resume-webhook responses in this n8n version.** The browser receives `{"message":"Workflow was started"}` instead of the styled HTML page.
+
+Functional behavior is fine — the workflow resumes correctly; the Slack thread reply is the authoritative outcome surface. Captured as a known limitation in [[runbook]]. Not blocking; revisit if A2.5 wants the pretty page.
+
+### E3 — Spec section 5b's "manual fallback URL" doesn't work (Phase 6)
+
+Section 5b says: *"If `$execution.resumeUrl` doesn't populate in pre-Wait nodes in this n8n version (open question for Phase 0), fall back to manual construction: `http://192.168.129.132:5678/webhook-waiting/{{ $execution.id }}?decision=approve|deny`."*
+
+**The manual fallback URL returns `{"error": "Invalid token"}`.** n8n Wait webhooks require a signed `signature=...` query parameter computed from execution data with a server secret; it can't be reconstructed manually.
+
+**Corrected pattern (the as-shipped one):** always use `{{ $execution.resumeUrl }}` (which populates correctly even in nodes before the Wait, per the Phase 0 question now answered) and append `&decision=approve|deny` (note `&` not `?` — `?signature=...` is already on the URL).
+
+Side benefit on the original spec's threat model: signed URLs make the access-control surface "anyone with the Slack message" rather than "anyone on the LAN who can guess execution IDs". A2.5 inherits a smaller scope as a result.
+
 ## Success criteria
 
-A2 is "done" when:
+A2 is "done" when (all satisfied as of 2026-04-30):
 
-1. All five pinned test cases pass per the verification checklists in 8b
-2. End-to-end verification with real Splunk alert succeeds for the Approve path
-3. Iris **cases** are created from approved alerts; Iris's **case-level IOC database** shows the imported IOCs (not just the alert's IOC tab)
-4. Slack thread shows the full audit trail: original alert post + outcome reply (Approve/Deny/Timeout/escalation-failure)
-5. URL buttons render in Slack and are clickable from the analyst's LAN browser
-6. Timeout fires correctly at 30 min without manual intervention
-7. Negative-path test (Test 5) produces the expected "approved but escalation failed" Slack message
-8. `runbook.md` for A2 covers deploy / rollback / verify / debug
-9. `notes.md` captures gotchas hit during build (mirroring A1's note-taking discipline)
-10. ADR written for the `iocs_enriched.ioc_type` schema enhancement (additive; explain why it's still v1)
-11. Log entry at vault root marks A2 complete
-12. Iris IOC type ID catalog documented in `vault/architecture/components/dfir-iris.md`
+1. [x] All five pinned test cases pass per the verification checklists in 8b — Phase 10
+2. [x] End-to-end verification with real Splunk alert succeeds for the Approve path — Phase 11.2 (alerts #47/#48 -> cases #11/#12); Phase 12 follow-up (alert #50 -> case #13)
+3. [x] Iris **cases** are created from approved alerts; Iris's **case-level IOC database** shows the imported IOCs (not just the alert's IOC tab) — verified Phase 11.2 + Phase 12
+4. [x] Slack thread shows the full audit trail: original alert post + outcome reply (Approve/Deny/Timeout/escalation-failure)
+5. [x] URL buttons render in Slack and are clickable from the analyst's LAN browser
+6. [x] Timeout fires correctly at 30 min without manual intervention — verified at 30s test value Phase 10 Test 4; production 1800s confirmed by inspection
+7. [x] Negative-path test (Test 5) produces the expected "approved but escalation failed" Slack message — Phase 10 Test 5
+8. [x] `runbook.md` for A2 covers deploy / rollback / verify / debug — Phase 12, [[runbook]]
+9. [x] `notes.md` captures gotchas hit during build (mirroring A1's note-taking discipline) — [[notes]]
+10. [x] ADR written for the `iocs_enriched.ioc_type` schema enhancement (additive; explain why it's still v1) — Phase 12, [[../../decisions/0005-additive-ioc-type-schema-enhancement]]
+11. [x] Log entry at vault root marks A2 complete — Phase 12, [[../../log]]
+12. [x] Iris IOC type ID catalog documented in `vault/architecture/components/dfir-iris.md` — Phase 0.1, [[../../architecture/components/dfir-iris]]
 
 ## Predecessors
 

@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-04-28
+updated: 2026-04-29
 related: [[architecture/current-state]]
 ---
 
@@ -112,3 +112,29 @@ curl -ks -H "Authorization: Bearer <iris-api-key>" \
   https://192.168.129.133/manage/severities/list \
   | python -m json.tool
 ```
+
+## `/alerts/escalate/{alert_id}` handler bugs (deployment-specific, captured 2026-04-29)
+
+The Iris OpenAPI spec marks `case_tags` and `assets_import_list` as **optional** on the escalate request body. In practice, the handler in our running v2.4.22 deployment crashes with unhandled-`None` errors when either field is omitted:
+
+| Field omitted | Server-side error |
+|---|---|
+| `case_tags` | `'NoneType' object has no attribute 'split'` — handler calls `.split(',')` on `case_tags` without null-check |
+| `assets_import_list` | `'NoneType' object is not iterable` — handler iterates over `assets_import_list` without null-check |
+
+**Always include both fields in the escalate body, even if empty:**
+
+```json
+{
+  "iocs_import_list": [...],
+  "assets_import_list": [],
+  "case_tags": "soc-automation,a2,auto-escalated",
+  "import_as_event": true,
+  "note": "...",
+  "case_title": "..."
+}
+```
+
+`assets_import_list: []` and `case_tags: "anything"` are both safe degenerate values — the handler accepts them and creates a case with no assets and the given tag string. A2's `Build Escalate Body` Code node always includes both, so this isn't a current blocker; the rule is here so future integrators don't trim "optional" fields from the body and silently 500.
+
+This is a Iris-side spec/implementation mismatch, not something we can fix from the integrator's side. Worth tracking against future Iris versions: the handler may pick up null-checks in a later release and the rule may relax. Re-test if Iris is upgraded.
