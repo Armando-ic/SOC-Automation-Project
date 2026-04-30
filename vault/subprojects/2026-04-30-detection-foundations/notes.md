@@ -110,6 +110,37 @@ License stack: **Splunk Enterprise Download Trial** (500 MB/day, type `download-
 
 To dodge Python escape-sequence headaches with PowerShell paths, the Phase-0 probes were factored into `scripts/d1_phase0_ssh.py`. The script reads the Windows VM password from the gitignored `SOC-Automation-Project.md` at repo root via regex (no plaintext secrets in the script itself). Pattern is reusable for any future paramiko probes; safe to commit.
 
+## Phase 1 captures (2026-04-30)
+
+### Sysmon install metadata
+
+| | |
+|---|---|
+| SwiftOnSecurity commit SHA | `1836897f12fbd6a0a473665ef6abc34a6b497e31` |
+| SwiftOnSecurity commit msg | `Merge pull request #151 from Neo23x0/patch-8` |
+| Config file path | `C:\Tools\sysmon-config\sysmonconfig-export.xml` |
+| Config file bytes | 123,257 |
+| Config file SHA256 | `055FEBC600E6D7448CDF3812307275912927A62B1F94D0D933B64B294BC87162` |
+| Config schema version | 4.50 (per SwiftOnSecurity) |
+| Sysmon binary | `C:\Tools\Sysmon\Sysmon64.exe` |
+| Sysmon version | 15.20 (FileVersion 15.20, ProductName "Sysinternals Sysmon") |
+| Sysmon supported schema | 4.91 (loaded the older 4.50 config without issues) |
+| Install command | `Sysmon64.exe -accepteula -i sysmonconfig-export.xml` |
+| Install exit code | 0 |
+| Install date | 2026-04-30 |
+
+### Verification
+
+- **Service:** `Get-Service Sysmon64` → `Status=Running, StartType=Automatic`.
+- **Event Log channel:** `Microsoft-Windows-Sysmon/Operational` registered, `IsEnabled=True`, `RecordCount=4` immediately after install (Sysmon's own startup events: `EventCode=4` service-state-changed, plus a couple of EventCode=1 process creates from the install activity).
+- **Config loaded:** `Sysmon64.exe -c` confirmed the SwiftOnSecurity config is the running config.
+
+### Gotchas hit
+
+1. **`cmd.exe` 8KB command-line limit.** OpenSSH on Windows wraps inbound commands through `cmd.exe`, which caps at ~8KB. PowerShell `-EncodedCommand` (UTF-16LE base64) inflates a script ~3-4x, so Phase 1's ~3KB script overflowed. Solution: SFTP a `.ps1` to the VM and execute via `powershell -File`. Captured in `scripts/d1_lib.py` as `run_ps_script()`.
+2. **Sysmon native stderr crashes strict PowerShell.** With `$ErrorActionPreference = 'Stop'`, Sysmon's banner output to stderr (which is structurally normal) gets wrapped as a `RemoteException` and the script halts. Solution: relax the preference around native command calls and gate on `$LASTEXITCODE` instead. Captured in `scripts/d1_phase1_sysmon_install.py` Step G.
+3. **Sysmon `-?` writes the EULA banner to stderr.** Caused the same RemoteException issue. Solution: read version metadata from the file itself (`(Get-Item $exe).VersionInfo`) instead of invoking `-?`.
+
 ## Open follow-ups
 
 - Confirm Universal Forwarder service uptime > a few seconds (was the restart already performed by something else?). If `(Get-Date) - (Get-Process splunkd).StartTime` shows a process younger than the inputs.conf LastWriteTime, the restart already happened and we can skip Phase 2 Task 2.2 Step 3.
