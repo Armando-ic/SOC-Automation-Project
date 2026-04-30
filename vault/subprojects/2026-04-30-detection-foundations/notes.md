@@ -141,6 +141,52 @@ To dodge Python escape-sequence headaches with PowerShell paths, the Phase-0 pro
 2. **Sysmon native stderr crashes strict PowerShell.** With `$ErrorActionPreference = 'Stop'`, Sysmon's banner output to stderr (which is structurally normal) gets wrapped as a `RemoteException` and the script halts. Solution: relax the preference around native command calls and gate on `$LASTEXITCODE` instead. Captured in `scripts/d1_phase1_sysmon_install.py` Step G.
 3. **Sysmon `-?` writes the EULA banner to stderr.** Caused the same RemoteException issue. Solution: read version metadata from the file itself (`(Get-Item $exe).VersionInfo`) instead of invoking `-?`.
 
+## Phase 2 captures (2026-04-30)
+
+### UF backup + restart
+
+- `inputs.conf` backed up to `C:\Program Files\SplunkUniversalForwarder\etc\system\local\inputs.conf.pre-D1.bak` (923 bytes, original 2026-04-25 19:49 mtime preserved on the backup file).
+- `Restart-Service SplunkForwarder` succeeded; service back to `Status=Running, StartType=Automatic` within 3 seconds.
+- splunkd.log tail captured the modular-input scheme registrations but did not show a Sysmon-specific bind line (the `WinEventLog` channel binding messages may not appear in the default log level — the smoke test below is the authoritative confirmation that the bind happened).
+
+### Tier-1 smoke test #1 — `notepad.exe` end-to-end
+
+- **PASS.** Indexing lag ~30 seconds.
+- Spawned: `notepad.exe` PID 7364 at 2026-04-30T13:54:04 EDT.
+- Splunk event:
+  - `_time`: 2026-04-30 17:54:04.063 UTC (matches spawn timestamp exactly after EDT→UTC conversion)
+  - `Image`: `C:\Windows\System32\notepad.exe`
+  - `CommandLine`: `"C:\Windows\system32\notepad.exe"`
+  - `ParentImage`: `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe` (the SSH session's PowerShell wrapper around `Start-Process`)
+  - `User`: `DESKTOP-VNEF7PC\mydfir`
+  - `ProcessId`: 7364 (matches the PowerShell-reported PID)
+- Field extraction worked correctly through Splunk Add-on for Microsoft Sysmon.
+- `ComputerName` field returned empty when `| table`'d — the add-on may map host to a different field name (`host`, `Computer`, or `dest_host` are common alternatives). Will sort out exact name in Phase 4 SPL development; not blocking.
+
+### Tier-1 smoke test #2 — EventCode coverage in our lab
+
+After seeding varied activity (notepad, calc, Invoke-WebRequest to google.com, file create + delete, registry write):
+
+| EventCode | Name | Count (last 15m) |
+|---|---|---|
+| 1 | Process Create | 108 |
+| 11 | File Create | 4 |
+| 13 | Registry Value Set | 4 |
+| 3 | Network Connect | 3 |
+| 22 | DNS Query | 2 |
+| 16 | Sysmon Config Change | 1 |
+| 4 | Sysmon Service State Change | 1 |
+| 8 | CreateRemoteThread | 1 |
+
+**Notable absences (the SwiftOnSecurity config intentionally filters these):** EventCode 5 (Process Terminate), 23 (File Delete), 12 (Registry Object Add). The `Remove-Item` and `New-Item` (HKCU:\Software\D1Test) seed activities did NOT produce EventCode 23 or 12 events — confirms the filtering in our env.
+
+**Implication:** any future detection that depends on EventCode 5/12/23 will need either a SwiftOnSecurity config tune or a different EventCode pivot. Captured in this notes file so future-fresh-instance doesn't waste time wondering "why didn't I see X." sysmon.md component page (Phase 8) will reference this baseline.
+
+### Phase 2 helper scripts
+
+- `scripts/d1_phase2_uf_restart.py` — backup + restart + smoke-test-#1 seed (notepad spawn). Re-runnable.
+- `scripts/d1_phase2_seed_coverage.py` — varied-activity seed for smoke-test-#2. Re-runnable; cleans up after itself (deletes the temp file + registry key).
+
 ## Open follow-ups
 
 - Confirm Universal Forwarder service uptime > a few seconds (was the restart already performed by something else?). If `(Get-Date) - (Get-Process splunkd).StartTime` shows a process younger than the inputs.conf LastWriteTime, the restart already happened and we can skip Phase 2 Task 2.2 Step 3.
