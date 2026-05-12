@@ -18,6 +18,9 @@ splunk-mcp-main/**/uv.lock
 # Python bytecode under scripts/
 scripts/__pycache__/
 
+# Locally-downloaded tooling archives (ART zip, etc.) — fetched on demand, not vendored
+downloads/
+
 # OS / editor noise
 .DS_Store
 Thumbs.db
