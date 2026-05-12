@@ -1,44 +1,63 @@
 ---
 status: active
-updated: 2026-04-29
-related: [[architecture/current-state]], [[workflows/soc-triage-pipeline]]
+updated: 2026-05-12
+related: [[architecture/current-state]], [[workflows/soc-triage-pipeline]], [[decisions/0007-remove-slack-iris-native-gate]]
 ---
 
 # n8n
 
 ## What it is
 
-Workflow automation engine playing the SOAR role. Runs in Docker via docker-compose on Ubuntu Server (`MyDFIR-n8n-VM`, 192.168.129.132).
+Workflow automation engine playing the SOAR role. Runs in Docker via docker-compose on Ubuntu Server 24.04 (`MyDFIR-n8n-VM-v2`, 192.168.129.132). VM rebuilt from scratch 2026-05-12 after the 2026-05-08 OneDrive incident — see [[../subprojects/2026-04-30-detection-foundations/notes#phase-11-2026-05-12--post-rebuild-revalidation-on-rebuilt-lab]] for rebuild details.
 
 ## Configuration
 
 | | |
 |---|---|
+| VM | `MyDFIR-n8n-VM-v2` at `C:\VMs\MyDFIR-n8n-VM-v2\` |
 | Web UI | http://192.168.129.132:5678 |
 | Default port | 5678 |
 | Run command | `cd ~/n8n-compose && sudo docker-compose up -d` |
-| Image | `n8nio/n8n:latest` |
+| Image | `n8nio/n8n:latest` (pulled 2026-05-12) |
 | Data volume | `~/n8n-compose/n8n_data/` (chowned to UID:GID 1000:1000) |
+| Compose env | `N8N_HOST=192.168.129.132`, `N8N_PORT=5678`, `N8N_PROTOCOL=http`, **`N8N_SECURE_COOKIE=false`** (see Known quirks) |
+| Docker / compose | Docker 29.1.3, docker-compose 1.29.2 |
+| Static IP | Pinned via netplan; cloud-init network config disabled (`/etc/cloud/cloud.cfg.d/99-disable-network-config.cfg`) |
 
-## Configured credentials in n8n
+## Configured credentials in n8n (post-2026-05-12 rebuild)
 
-(IDs reference the credential within the n8n instance, not secret values.)
+After the 2026-05-12 fresh n8n install, the credential IDs are new (the old IDs `VozkiMP8QqbykLLj`, `IWEqjD1DvRajiKXy`, etc. are v2 artifacts and don't exist on the rebuilt instance). The workflow JSON references the OLD IDs, so each credential must be re-bound to the corresponding node post-import.
 
-| Credential | n8n credential ID | Used by |
-|---|---|---|
-| Anthropic account | `VozkiMP8QqbykLLj` | Message a model node |
-| Slack account | `IWEqjD1DvRajiKXy` | Send a message node |
-| VirusTotal account | `MPJtvrtzx8nfI5Ot` | VirusTotal-Hash tool, phishing template |
-| DFIR-IRIS account | `rwvgiJMaHqI9hCC9` | DFIR-IRIS HTTP Request node |
+| Credential | n8n type | Used by | Notes |
+|---|---|---|---|
+| Anthropic account | `anthropicApi` | Message a model node | API key from gitignored secrets file |
+| VirusTotal account | `virusTotalApi` | lookup_file_hash_virustotal (AI tool) | API key from secrets file |
+| AbuseIPDB account | `httpHeaderAuth` (Header Auth) | enrich_ip_abuseipdb (AI tool) | Header name `Key`, value is API key. **Migrated from v0-inline-key to credential during A1.** |
+| DFIR-IRIS account | `dfirIrisApi` | Create Iris Alert (HTTP Request) | Host `https://192.168.129.133`, Bearer API key from secrets file. **Enable "Ignore SSL Issues" — IRIS uses self-signed cert.** |
 
-AbuseIPDB key is currently inline in the workflow JSON, not a credential — to be migrated as part of [[subprojects/2026-04-27-structured-outputs/README]].
+**Slack credential intentionally absent** as of v3 (ADR 0007 — human approval moved to IRIS-native review).
 
 ## Workflows
 
-- **My workflow** (id: `45gQjuH2MFQYrlEx`) — the SOC triage pipeline. See [[workflows/soc-triage-pipeline]].
-- Two templates imported for reference:
+- **SOC Triage v3** — current production workflow on the rebuilt n8n instance. Imported from `JSON/SOC-Triage-v3.json`. See [[workflows/soc-triage-pipeline]].
+- Two templates imported for reference (carried forward through rebuild for documentation purposes — re-import them post-rebuild if you want them back; they're not loaded on the v2 VM by default):
   - `Phishing_analysis__URLScan_io_and_Virustotal_` — pattern reference for iteration, error gating, async waits
   - `My workflow 2` (Zendesk + Qdrant) — pattern reference for structured output parsing and RAG retrieval
+
+## Known quirks (post-rebuild 2026-05-12)
+
+### `N8N_SECURE_COOKIE=false` is required for LAN HTTP access
+
+`n8nio/n8n:latest` (current image) defaults to `N8N_SECURE_COOKIE=true`, which blocks any non-localhost HTTP access with a "secure cookie required" wall on `/setup`. Three options:
+- HTTPS via TLS reverse proxy (real fix — significant scope, deferred)
+- `localhost` only (not viable — we need LAN access from Splunk and host browser)
+- `N8N_SECURE_COOKIE=false` (pragmatic; this is what's set)
+
+For a lab on a private NAT-only subnet this is fine. For internet-exposed deployment it would not be.
+
+### docker-compose 1.29.2 `--force-recreate` is broken against newer Docker
+
+`docker-compose up -d --force-recreate` fails with `KeyError: 'ContainerConfig'` in `/usr/lib/python3/dist-packages/compose/service.py` because newer Docker (29.x) deprecated that field in image inspect output. Workaround: `docker-compose down && docker-compose up -d` instead of using `--force-recreate`.
 
 ## How to access
 

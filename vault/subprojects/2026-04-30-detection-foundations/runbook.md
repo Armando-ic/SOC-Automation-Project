@@ -540,6 +540,37 @@ Invoke-AtomicTest T<id> -TestNumbers <N>
 
 `-GetPrereqs` auto-installs missing modules from PowerShell Gallery.
 
+**TLS 1.2 gotcha (surfaced 2026-05-12 on Win10-v2 rebuild):** `Install-Module` silently fails with no output on Windows 10 default PowerShell 5.1 because PSGallery dropped TLS 1.0/1.1 support in 2020. If `-GetPrereqs` produces zero output, run this **before** retrying:
+
+```powershell
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+Install-Module -Name AtomicTestHarnesses -Scope CurrentUser -Force -SkipPublisherCheck -AllowClobber
+```
+
+Then retry `Invoke-AtomicTest`. Verify the module loaded with `Get-Module -ListAvailable AtomicTestHarnesses`. If you can't (or won't) fix the install, a synthetic `powershell.exe -EncodedCommand` invocation produces the same Sysmon event shape and matches the same SPL — see Phase 11 of notes.md for the inline pattern.
+
+### "Saved search returns 0 results when dispatched, but the same SPL works ad-hoc" (REST-API trap)
+
+Symptoms:
+- Saved search created via REST API (`POST /servicesNS/<user>/<app>/saved/searches`).
+- `dispatch` returns `resultCount=0` and `scanCount` is tiny (~10) despite the index containing thousands of matching events.
+- Same SPL run interactively in the Search & Reporting UI returns events correctly (possibly with a yellow "show errors" warning about lookups — that's unrelated and harmless).
+- The cron-fired scheduled instances are also returning 0 (`run_time=0.062` in scheduler.log — way too fast for a 24h scan).
+
+Root cause (surfaced 2026-05-12): the `search` parameter posted to the saved-search REST endpoint should NOT include a leading `search` keyword. The REST API stores it verbatim, then Splunk's runtime parser prepends its own implicit `search` — producing `search search index=...`. The second `search` becomes a **literal search term**, filtering events to only those containing the word "search" in raw text (~10 of them across the whole index in our case).
+
+**Fix:** delete and recreate the saved search with the SPL starting with `index=` (or `source=`, or `host=`, or any other field-value filter), NOT with `search ...`. The UI's Save As Alert flow strips the leading `search` automatically; the REST API does not.
+
+```python
+# Wrong (this was the bug):
+data = {'search': 'search index=mydfir-project source=... EventCode=1 | ... '}
+
+# Right:
+data = {'search': 'index=mydfir-project source=... EventCode=1 | ... '}
+```
+
+Diagnostic: dispatch the search and look at `/opt/splunk/var/run/splunk/dispatch/<sid>/info.csv`. The `_base_lispy` field shows the parsed lispy form. If you see `search` appearing as an AND-clause term (e.g., `[ AND index::mydfir-project search source::... ]`), that's the doubled-`search` signature.
+
 ---
 
 ## Standby fix — system-prompt addendum

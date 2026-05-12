@@ -483,8 +483,84 @@ This means **Splunk's "For each result" trigger with `alert.suppress=False` does
 - Saved-search scheduling: needs `realtime_schedule=false` explicitly set; default `True` from "Save As Alert" wizard caused `is_scheduled` to silently flip back to False after configuration changes (Splunk 10.2.2 quirk; documented above).
 - Manual REST dispatch with `trigger_actions=1` does NOT reliably fire alert actions on Splunk 10.2.2 — even when the search returns matching results. Only cron-driven dispatches fired the webhook in this session.
 
+## Phase 11 (2026-05-12) — Post-rebuild revalidation on rebuilt lab
+
+Triggered by D1 freeze prep. After the 2026-05-08 OneDrive incident forced rebuilds of Win10 → Win10-v2 and (this session) n8n + IRIS from scratch, the freeze required reproducing the full end-to-end chain. Surfaced four real gotchas, one of which corrects a misdiagnosis from Phase 6.
+
+### Correction to Phase 6 closeout note (line 484)
+
+Phase 6 noted: *"Manual REST dispatch with `trigger_actions=1` does NOT reliably fire alert actions on Splunk 10.2.2 — even when the search returns matching results. Only cron-driven dispatches fired the webhook in this session."*
+
+**That observation had a real root cause we identified in Phase 11.** The saved search the 2026-04-30 UI flow created stored the search string *without* a leading `search` keyword (UI's Save As Alert always strips it). When I recreated the saved search via REST API on 2026-05-12, my SPL string included `search index=mydfir-project ...`. Splunk's REST API stored that verbatim, and at execution time prepended its own implicit `search` — producing `search search index=mydfir-project ...`. The Splunk parser then treated the second `search` as a **literal search term**, filtering the indexed-event stream to only events containing the word "search" somewhere in the raw text. Result: scan_count dropped from ~14110 to ~10, and `result_count=0` because none of those 10 matched the encoded-PS regex.
+
+The Splunk Web UI's parser tolerated the doubled-`search` and still returned 2 events on interactive runs. The scheduler's stricter parsing reduced the dataset and dropped to 0.
+
+**Rule: when creating a Splunk saved search via REST API, omit the leading `search` keyword from the `search` parameter value.** Submit `index=foo source=bar ... | regex ...` not `search index=foo source=bar ... | regex ...`. The UI's Save As Alert flow does this automatically; the REST API does not.
+
+This bug is now documented in the D1 runbook's Recoveries ladder.
+
+### Gotcha: AtomicTestHarnesses module install requires TLS 1.2 enable on Win10
+
+`Invoke-AtomicTest T1059.001 -TestNumbers 15` depends on the `AtomicTestHarnesses` PowerShell module's `Out-ATHPowerShellCommandLineParameter` cmdlet. ART's `-GetPrereqs` flag is supposed to install it. On the freshly rebuilt Win10-v2 (Phase 11) this install silently failed with zero output from `Install-Module`.
+
+Root cause: PowerShell 5.1 on Windows 10 defaults to TLS 1.0/1.1, but PSGallery dropped TLS 1.0/1.1 support in 2020. `Install-Module` silently fails with no useful error.
+
+**Fix before running prereq install:**
+```powershell
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+Install-Module -Name AtomicTestHarnesses -Scope CurrentUser -Force -SkipPublisherCheck -AllowClobber
+```
+
+The D1 runbook's Phase 3 install ladder already documented setting TLS 1.2 before bootstrapping ART itself (line 201 of these notes references that). The same fix is required for the AtomicTestHarnesses prereq install, which is a separate `Install-Module` call.
+
+This was missed during the 2026-05-08 Win10-v2 reinstall; the log entry that day documented installing `ART module + atomics 332 techniques + powershell-yaml dependency` but not `AtomicTestHarnesses`. The Phase 11 revalidation surfaced this as a re-install gotcha to add to the runbook.
+
+**Workaround used in Phase 11 (instead of fixing the install):** generated a synthetic `powershell.exe -EncodedCommand` event directly via SSH, bypassing ATH. The SPL filters on Image + CommandLine + regex — it doesn't care which generator produced the encoded command. Same Sysmon event shape, same SPL match.
+
+### Gotcha: Splunk_TA_windows lookup CSV files missing on rebuilt Splunk
+
+Every saved-search dispatch (and many interactive searches) emits three warnings:
+```
+Could not load lookup=LOOKUP-1severity_for_windows
+Could not load lookup=LOOKUP-CategoryString_for_windows
+Could not load lookup=LOOKUP-signature_for_windows3
+```
+
+The `Splunk_TA_windows` add-on is installed on the indexer (verified in `/opt/splunk/etc/apps/`), but the lookup CSV files those `LOOKUP-` transforms reference aren't present anywhere on disk (verified via recursive grep). Likely an incomplete app install during the 2026-05-08 Splunk snapshot recovery — only `Splunk_TA_microsoft_sysmon` was explicitly reinstalled; `Splunk_TA_windows` may have been left in a half-installed state from the pre-incident lab.
+
+**Impact: cosmetic only.** These lookups apply to `wineventlog` sourcetype (raw Windows event log fields), not `XmlWinEventLog:Microsoft-Windows-Sysmon/Operational` (Sysmon events — what D1's detection uses). The warnings appear but searches still return correct results.
+
+**Fix (deferred, not blocking D1 freeze):** Either reinstall `Splunk_TA_windows` from splunkbase to restore the lookups dir, or remove the lookup definitions from `props.conf`/`transforms.conf` since they're not used by any D1 search. Either approach is a Splunk-add-on hygiene pass for a future session, not a freeze blocker.
+
+### Gotcha: severity-stamping inconsistency persists in v3, with new variation
+
+The Phase 6 closeout flagged "Claude's narrative says 'medium' or 'high' but the structured severity_id values were 1 (alert #51) and 5 (alert #52)". Phase 11 confirms this is still present in v3 with a new variation: alert #4 came back as `severity_name=Low (id=4)` with prose mentioning "low" — internally consistent this time but not matching the threat level (PowerShell encoded command should never be "low"; it's a confirmed offensive technique, classification by behavior is medium-or-higher even if the specific decoded payload is benign).
+
+Hypothesis: Claude is severity-rating based on the *decoded payload content* (Write-Host of a GUID — benign) rather than the *technique class* (encoded PowerShell — suspicious). This is a system-prompt tuning issue, not a wiring bug.
+
+**Still deferred to D1.5 / A3 era investigation** as the original Phase 6 note said.
+
+### Cron-driven validation success on rebuilt lab
+
+After fixing the doubled-`search` issue, the very next cron tick (the manual dispatch immediately after the fix) produced **IRIS alert #4** with full Claude triage description:
+
+```
+title:    T1059.001 - PowerShell Encoded Command
+severity: Low (id=4) — see severity-stamping gotcha above
+iocs:     0 (gate-skipped-path-equivalent; Claude found no IOC-shaped data in the decoded payload)
+desc:     1250 chars; Claude correctly identified the encoded-PowerShell technique
+          and decoded the base64 payload independently as "Write-Host freeze-validation-<guid>"
+          - same independent-decoding behavior captured in Phase 6 alerts #51/#52
+```
+
+Architectural promise from D1's spec § 2.7 — *Sysmon-shaped alert traverses A2's path on real production traffic with no n8n changes* — **revalidated on the post-Slack-removal v3 workflow** (ADR 0007). Worked example holds across the v2→v3 workflow transition. The detection page's evidence section adds alert #4 alongside #51/#52.
+
 ## Open follow-ups
 
 - Confirm Universal Forwarder service uptime > a few seconds (was the restart already performed by something else?). If `(Get-Date) - (Get-Process splunkd).StartTime` shows a process younger than the inputs.conf LastWriteTime, the restart already happened and we can skip Phase 2 Task 2.2 Step 3.
-- Decide ADR-0006: install of Splunk Add-on for Microsoft Sysmon. Lean: yes, mid-D1 closeout.
-- Phase 8's `splunk.md` update should add the Sysmon Add-on to the "Apps installed" section.
+- Decide ADR-0006: install of Splunk Add-on for Microsoft Sysmon. Lean: yes, mid-D1 closeout. **DONE 2026-04-30** (ADR-0006 written).
+- Phase 8's `splunk.md` update should add the Sysmon Add-on to the "Apps installed" section. **DONE 2026-04-30.**
+- Phase 11 gotchas catalogued above. Items to act on later (not blocking D1 freeze):
+  - Fix `Splunk_TA_windows` lookup CSVs (cosmetic).
+  - Install `AtomicTestHarnesses` properly on Win10-v2 with TLS 1.2 (so future ATH-based tests work).
+  - Investigate severity-stamping inconsistency (D1.5 / A3 era).

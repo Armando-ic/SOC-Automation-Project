@@ -29,6 +29,7 @@ Catalog of every page in this vault, organized by category. Updated whenever a n
 - [[subprojects/2026-04-27-structured-outputs/README]] — A1: Structured Outputs (complete)
 - [[subprojects/2026-04-28-iris-escalation-gate/README]] — A2: Iris Escalation Gate (complete)
 - [[subprojects/2026-04-30-detection-foundations/README]] — D1: Detection Foundations (complete)
+- [[subprojects/2026-05-12-enrichment-expansion/README]] — A3: Enrichment expansion (stub, awaiting brainstorm)
 
 ## Detections
 
@@ -44,6 +45,7 @@ Catalog of every page in this vault, organized by category. Updated whenever a n
 - [[decisions/0004-mirror-mcp-to-claude-code]] — Why Splunk MCP is configured in both Desktop and Code
 - [[decisions/0005-additive-ioc-type-schema-enhancement]] — A2's additive `ioc_type` schema enhancement
 - [[decisions/0006-splunk-add-on-for-microsoft-sysmon]] — D1's choice to install the Sysmon add-on + use `XmlWinEventLog:` source prefix
+- [[decisions/0007-remove-slack-iris-native-gate]] — Remove Slack from workflow; move human-approval gate to IRIS-native review
 
 ## Runbooks
 

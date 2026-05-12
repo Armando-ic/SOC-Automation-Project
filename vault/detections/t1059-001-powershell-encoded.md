@@ -2,8 +2,8 @@
 status: saved-search-active
 technique_id: T1059.001
 tactic: Execution
-last_run: 2026-04-30
-related: [[../subprojects/2026-04-30-detection-foundations/runbook]], [[../architecture/components/sysmon]], [[../architecture/components/splunk]]
+last_run: 2026-05-12
+related: [[../subprojects/2026-04-30-detection-foundations/runbook]], [[../architecture/components/sysmon]], [[../architecture/components/splunk]], [[../workflows/soc-triage-pipeline]], [[../decisions/0007-remove-slack-iris-native-gate]]
 ---
 
 # T1059.001 — Command and Scripting Interpreter: PowerShell
@@ -114,3 +114,34 @@ Two cron firings produced two Iris alerts (#51 and #52), both with `iocs=[]` —
 - **False positives in our environment so far: zero.** The only matches are intentional ART runs.
 - If Claude misbehaves on the Sysmon-shaped payload (returns a malformed triage), the standby fix is the one-paragraph system-prompt addendum documented in [[../subprojects/2026-04-30-detection-foundations/runbook]] — *reactive only*; not applied by default. **Was not needed during D1's live-fire — Claude's default behavior on Sysmon payloads is correct.**
 - Decoding the base64 payload is **not** done in SPL. Claude does it on the n8n side as part of triage. If the decoded payload contains something IOC-shaped (URL, IP literal, domain, hash), the gate fires (Outcome B). For ATH Test 15 (synthetic GUID payload), no IOCs exist inside the decoded payload — gate stays skipped (Outcome A).
+
+## Re-validation 2026-05-12 (post-rebuild, v3 workflow)
+
+After the 2026-05-08 OneDrive incident forced rebuilds of Win10 → Win10-v2 and (2026-05-12) n8n + IRIS from scratch, the detection chain was re-validated on the rebuilt lab. Per ADR 0007 the workflow simplified to v3 (Slack removed; human approval moves to IRIS-native review) — the detection chain's terminal node is now `Create Iris Alert` rather than the v2 gate-fired branch.
+
+**Saved search recreated 2026-05-12** via REST API (the 2026-05-08 Splunk snapshot revert had wiped the original). The recreation surfaced a REST-API gotcha — see "Saved-search REST-API trap" below.
+
+### Live-fire evidence
+
+| Date | Generator | Iris alert | Notes |
+|---|---|---|---|
+| 2026-04-30 | ATH Test 15 (WmiPrvSE parent) | #51 | Gate-skipped path, iocs=[], severity_id=1 (Medium prose) |
+| 2026-04-30 | ATH Test 15 | #52 | Gate-skipped path, iocs=[], severity_id=5 (High prose) — severity-stamping inconsistency observed first time here |
+| 2026-05-12 | Synthetic webhook (Splunk-shape payload via curl) | #1, #2 | n8n+IRIS half re-validated; Claude decoded base64 independently, found no IOCs |
+| 2026-05-12 | Synthetic `powershell.exe -EncodedCommand` via SSH to Win10-v2 → real cron-driven path | **#4** | **Full chain validated on rebuilt lab.** Severity = Low (id=4). Claude decoded payload as `Write-Host freeze-validation-<guid>`. AtomicTestHarnesses install was missed on Win10-v2 rebuild (TLS 1.2 not enabled during install) so a synthetic invocation substituted for ATH — same Sysmon event shape, same SPL match. |
+
+Architectural promise from D1's spec § 2.7 *(Sysmon-shaped alert traverses A2's path on real production traffic with no n8n changes)* **revalidated** on v3 — the architecture survives the v2→v3 workflow simplification.
+
+### Saved-search REST-API trap (root cause of a 4-hour debug 2026-05-12)
+
+When recreating the saved search via REST API on 2026-05-12, the initial attempts returned `result_count=0` despite the same SPL returning 2 events when run interactively. Root cause: my POST'd `search` parameter started with `search index=mydfir-project ...`. Splunk's REST API stored that verbatim, and at execution time prepended its own implicit `search` — producing `search search index=mydfir-project ...`. The Splunk runtime parser then treated the second `search` as a **literal search term** (matching the word "search" in raw event text), reducing the scan from ~14110 events to ~10 — none of which matched the encoded-PS regex.
+
+**Rule:** REST-API-created saved searches should NOT include the leading `search` keyword. The UI's "Save As Alert" flow strips it automatically; the REST API does not.
+
+This is now captured in [[../subprojects/2026-04-30-detection-foundations/runbook#recoveries]] as a recovery ladder entry, and in [[../subprojects/2026-04-30-detection-foundations/notes#phase-11-2026-05-12--post-rebuild-revalidation-on-rebuilt-lab]].
+
+### Phase 11 gotchas worth knowing for future detection work
+
+- **AtomicTestHarnesses install needs TLS 1.2 explicit-enable** on Win10 default PowerShell 5.1. `[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12` before `Install-Module`.
+- **`Splunk_TA_windows` lookup CSVs are missing** on the rebuilt Splunk install. Three `Could not load lookup=LOOKUP-*_for_windows` warnings appear on every search. **Cosmetic only** — these lookups apply to `wineventlog` sourcetype, not Sysmon. Doesn't affect this detection's results.
+- **`alert_status_id=1` maps to "Unspecified"** on IRIS v2.4.22 (not "New" as historically documented). Workflow's hardcoded `1` should be re-derived; see workflow doc Known Issues.

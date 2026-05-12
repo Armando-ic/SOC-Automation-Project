@@ -1,29 +1,54 @@
 ---
 status: active
-updated: 2026-04-29
-related: [[architecture/current-state]]
+updated: 2026-05-12
+related: [[architecture/current-state]], [[workflows/soc-triage-pipeline]], [[decisions/0007-remove-slack-iris-native-gate]]
 ---
 
 # DFIR-Iris
 
 ## What it is
 
-Open-source incident response case management. Receives alerts from the n8n workflow, organizes them into investigations. Runs in Docker via docker-compose on Ubuntu Server (`MyDFIR-DFIR-IRIS-VM`, 192.168.129.133).
+Open-source incident response case management. Receives alerts from the n8n workflow, organizes them into investigations. Runs in Docker via docker-compose on Ubuntu Server 24.04 (`MyDFIR-DFIR-IRIS-VM-v2`, 192.168.129.133). VM rebuilt from scratch 2026-05-12 after the 2026-05-08 OneDrive incident.
 
 ## Configuration
 
 | | |
 |---|---|
+| VM | `MyDFIR-DFIR-IRIS-VM-v2` at `C:\VMs\MyDFIR-DFIR-IRIS-VM-v2\` |
 | Web UI | https://192.168.129.133 (HTTPS, self-signed cert) |
-| Version | v2.4.22 |
-| Source | https://github.com/dfir-iris/iris-web |
-| Run command | `cd ~/iris-web && sudo docker-compose up` |
-| Admin user | `administrator` (password in [[runbooks/secrets-management]]) |
-| API key | Generated under user settings; currently using admin's key (security debt — should create service account) |
+| Version | v2.4.22 (verified 2026-05-12 against rebuilt instance — IOC type IDs and severity IDs unchanged from 2026-04-28 capture) |
+| Source | https://github.com/dfir-iris/iris-web (git tag `v2.4.22`, commit `f75e56fb`) |
+| Run command | `cd ~/iris-web && sudo docker-compose up -d` |
+| Admin user | `administrator` (password regenerated 2026-05-12 by fresh install; current value in `SOC-Automation-Project.md` at project root) |
+| API key | Regenerated 2026-05-12 under user settings; current value in secrets file |
+| Containers | `iriswebapp_db` (postgres) · `iriswebapp_app` · `iriswebapp_nginx` · `iriswebapp_rabbitmq` · `iriswebapp_worker` |
+| Static IP | Pinned via netplan on the Ubuntu host; cloud-init network config disabled |
 
-## Setup gotcha
+## Setup gotchas (validated 2026-05-12 rebuild)
 
-The shipped `docker-compose.base.yaml` has `depends_on` directives that fail under the version of docker-compose available via apt. Workaround applied: comment out the `depends_on` lines. If the project ever upgrades docker-compose to v2 (the plugin form), revisit this.
+### `depends_on` blocks crash older docker-compose
+
+The shipped `docker-compose.base.yml` has three `depends_on:` directives that fail under the docker-compose-via-apt version (1.29.2). Workaround applied: **comment out the depends_on blocks** (lines 51, 80, 116 at v2.4.22 tag — the directives plus their indented service entries). Confirmed working post-rebuild 2026-05-12.
+
+```bash
+# automation-safe sed via awk that comments depends_on: + immediate indented `- "..."` children
+awk '
+  /depends_on:/ { commenting = 1; print "#" $0; next }
+  commenting && /^[[:space:]]+- / { print "#" $0; next }
+  commenting { commenting = 0 }
+  { print }
+' docker-compose.base.yml.bak > docker-compose.base.yml
+```
+
+If the project ever upgrades to docker-compose v2 (plugin form), revisit this — v2 handles `depends_on` differently and may not need the workaround.
+
+### `.env` must be fresh-copied from `.env.model` after git clone
+
+The repo at v2.4.22 ships a 36-byte `.env` that's NOT a valid environment file (parses to nothing). Postgres then fails to start with `POSTGRES_PASSWORD not specified`. Fix: explicitly `cp .env.model .env` after `git checkout v2.4.22`, overwriting the shipped stub.
+
+### Admin password displays once on first `docker-compose up`
+
+The `iriswebapp_app` container's first run generates a random admin password and **only prints it once to stdout**. Per the tutorial — *don't clear your terminal until you've copied it*. Or use `docker-compose up -d` and `docker-compose logs app | grep -i "password"` to retrieve after the fact (this is what we did 2026-05-12).
 
 ## API integration
 
@@ -41,7 +66,7 @@ The shipped `docker-compose.base.yaml` has `depends_on` directives that fail und
 | `alert_title` | Splunk search name | Comes from webhook |
 | `alert_description` | AI-generated text | Currently freeform Claude output; becomes structured per A1 |
 | `alert_severity_id` | Looked up from Claude's `severity` via the catalog table below | A2: corrected from A1's wrong table; see "Severity IDs" section |
-| `alert_status_id` | Hardcoded `1` (New) | Reasonable default |
+| `alert_status_id` | Hardcoded `1` — but **maps to "Unspecified" on v2.4.22**, not "New" as previously assumed | Documented inversion — see Alert Status IDs section below; cosmetic for now, fix when next revising the workflow |
 | `alert_customer_id` | Hardcoded `1` | Single-tenant lab — fine |
 
 ## IOC type IDs (captured 2026-04-28)
@@ -78,7 +103,23 @@ for t in d:
 "
 ```
 
-## Severity IDs (captured 2026-04-28)
+## Alert status IDs — captured 2026-05-12
+
+| `alert_status_id` | `status_name` |
+|---|---|
+| 1 | Unspecified |
+| (others to be captured when needed) | — |
+
+The workflow currently hardcodes `alert_status_id=1` (per the table in "Required fields"). On v2.4.22 this lands the alert as "Unspecified" status — not what was historically intended. Recapture and pick the appropriate ID (likely "New") in a future workflow revision.
+
+To recapture the full status catalog:
+
+```bash
+curl -ks -H "Authorization: Bearer <iris-api-key>" \
+  https://192.168.129.133/manage/alert-status/list | python -m json.tool
+```
+
+## Severity IDs (captured 2026-04-28, reverified 2026-05-12 — unchanged)
 
 Required by `Extract Triage Result`'s severity-mapping table (`sevId`). **Iris severity IDs are non-linear** — they do not follow severity order. **Re-capture if Iris is upgraded.**
 
