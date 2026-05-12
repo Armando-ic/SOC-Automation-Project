@@ -25,8 +25,8 @@ Old VMs (`MyDfir-Windows10`, `MyDFIR-n8n-VM`, `MyDIFR-DFIR-IRIS0VM`) are still l
 |---|---|---|
 | MyDfir-Windows10-v2 | `D1-fully-installed-2026-05-08` | After D1 install on the rebuilt Win10 |
 | MyDFIR-Splunk | `D1-baseline-restored-2026-05-08` | After OneDrive-incident recovery + `Splunk_TA_microsoft_sysmon` reinstall |
-| MyDFIR-n8n-VM-v2 | `n8n-installed-2026-05-12` *(pending)* | After fresh install + v3 workflow imported + 4 credentials wired |
-| MyDFIR-DFIR-IRIS-VM-v2 | `IRIS-installed-2026-05-12` *(pending)* | After fresh install + first-boot admin password captured + API key generated |
+| MyDFIR-n8n-VM-v2 | `n8n-installed-working` | After fresh install + v3 workflow imported + 4 credentials wired (taken 2026-05-12 12:34:42 PM) |
+| MyDFIR-DFIR-IRIS-VM-v2 | `IRIS-installed-working` | After fresh install + first-boot admin password captured + API key generated (taken 2026-05-12 12:37:42 PM) |
 
 ## Data flow (current — post-ADR 0007)
 
