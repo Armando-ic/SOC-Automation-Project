@@ -153,7 +153,7 @@ Open `f:\Claude_Code\SOC_Automation_Project\SOC-Automation-Project.md` (gitignor
 cd f:/Claude_Code/SOC_Automation_Project && grep -A1 '"name": "Key"' JSON/SOC-Automation-Project-Workflow-v0-baseline.json | head -5
 ```
 
-Copy the value (looks like `***REMOVED***`).
+Copy the value (a 64-char hex string).
 
 - [ ] **Step 2: Add the AbuseIPDB key to the secrets file**
 

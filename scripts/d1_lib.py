@@ -14,13 +14,23 @@ USER = "mydfir"
 
 
 def _load_password():
+    """Load the lab VM password from .env (preferred) or the legacy gitignored
+    SOC-Automation-Project.md file as a fallback. Both are gitignored — no
+    secret has ever been committed to this repo via this code path."""
     here = os.path.dirname(os.path.abspath(__file__))
+    env_path = os.path.normpath(os.path.join(here, "..", ".env"))
+    if os.path.exists(env_path):
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("MYDFIR_VM_PASSWORD="):
+                    return line.split("=", 1)[1].strip()
     secrets_path = os.path.normpath(os.path.join(here, "..", "SOC-Automation-Project.md"))
     with open(secrets_path, "r", encoding="utf-8") as f:
         text = f.read()
     m = re.search(r"MyDfir-Windows-10:\s*USERNAME:\s*\S+\s*\|\s*PASSWORD:\s*(\S+)", text)
     if not m:
-        raise RuntimeError("MyDfir-Windows-10 password not found in SOC-Automation-Project.md")
+        raise RuntimeError("MYDFIR_VM_PASSWORD not in .env and not found in SOC-Automation-Project.md")
     return m.group(1)
 
 

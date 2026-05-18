@@ -24,7 +24,7 @@ Working notes, gotchas, learnings, open questions discovered during build.
 - Initial commit `b7423fa` covered 59 files: vault scaffold + workflow exports + transcripts + Splunk MCP source.
 - AbuseIPDB API key was redacted from `JSON/SOC-Automation-Project-Workflow.json` before commit (placeholder text marks where the value lives in n8n).
 - Root `FORK-NOTES-2026-04-27-mcp-mirror-to-vscode.md` deleted; canonical copy lives at `vault/sources/session-notes/2026-04-27-mcp-mirror-fork.md`.
-- All literal `***REMOVED***` password references redacted from vault files (substituted with pointers to `SOC-Automation-Project.md`).
+- All literal lab-VM password references redacted from vault files (substituted with pointers to `SOC-Automation-Project.md`).
 
 ### Task 9.2 — End-to-end with real Splunk — 2026-04-28
 Cutover verified live. Splunk's `Test-Brute-Force` saved search fired, called the production webhook URL of `SOC Triage v1`, and the alert flowed all the way through Anthropic → Extract Triage Result → both Slack and DFIR-Iris.

@@ -10,10 +10,8 @@ vault/.trash/
 .env.local
 *.env
 
-# Splunk MCP runtime artifacts
-splunk-mcp-main/**/__pycache__/
-splunk-mcp-main/**/.venv/
-splunk-mcp-main/**/uv.lock
+# Vendored third-party Splunk MCP (kept on disk for local dev; referenced by upstream URL in README — not redistributed in this repo)
+splunk-mcp-main/
 
 # Python bytecode under scripts/
 scripts/__pycache__/
@@ -27,6 +25,7 @@ Thumbs.db
 *.swp
 .vscode/
 
-# Claude Code session metadata
+# Claude Code session metadata + per-instance context file (workspace-only, not for public repo)
 .claude/
+CLAUDE.md
 scratch/
