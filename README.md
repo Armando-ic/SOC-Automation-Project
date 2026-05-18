@@ -56,7 +56,7 @@ D1 frozen at 2026-05-12 after a from-scratch rebuild of n8n + IRIS (forced by an
 ## Next steps
 
 - **A3 — Enrichment Expansion** ([stub](vault/subprojects/2026-05-12-enrichment-expansion/README.md)) — add 2–3 new IOC enrichment sources (urlscan.io, URLhaus, IP2Location) beyond the current AbuseIPDB + VirusTotal pair. Awaiting brainstorm.
-- **Pivot toward Microsoft Sentinel / Azure SOC tooling.** D1 was frozen to clear the runway for this. The Splunk fundamentals (SPL, detection engineering, MITRE mapping, SOAR integration) translate; KQL and Azure-native security tooling are the next learning surface. Tracked in `Microsoft-SOC-Project/files/soc-pivot-microsoft-vs-splunk.md`.
+- **Pivot toward Microsoft Sentinel / Azure SOC tooling.** D1 was frozen to clear the runway for this. The Splunk fundamentals (SPL, detection engineering, MITRE mapping, SOAR integration) translate; KQL and Azure-native security tooling are the next learning surface. Tracked separately from this repo.
 
 ## Reading order for a fresh visitor
 
