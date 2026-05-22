@@ -474,12 +474,16 @@ Trade-off: loses the wide look-back for late-indexed events.
 ```bash
 curl -sk -u mydfir:<pw> -X POST \
   "https://192.168.129.131:8089/servicesNS/mydfir/search/saved/searches/<URL-encoded-name>" \
-  -d "alert.suppress=true&alert.suppress.fields=_time,host,Image,CommandLine&alert.suppress.period=24h"
+  -d "alert.suppress=true&alert.suppress.fields=_time,host,Image&alert.suppress.period=86400"
 ```
 
-This tells Splunk to suppress (deduplicate) on the combined value of those fields for 24 hours. Same row won't re-fire within the suppression window.
+This tells Splunk to suppress (deduplicate) on the combined value of those fields for 24 hours (86400 seconds). Same row won't re-fire within the suppression window.
 
-For D1's worked example, neither option was applied — the lab accepts duplicates as a learning-loop trade-off. Real production detections in this lab should use Option B.
+**Gotcha — suppress field list must reference fields that exist in the SPL's output rows.** The T1059.001 SPL ends with `| stats count, values(CommandLine) as command_lines, values(ParentImage) as parents by _time, host, User, Image`. After that `stats` step, the output rows have these field names: `_time, host, User, Image, count, command_lines, parents`. **There is no `CommandLine` field in the output** (it was renamed to `command_lines`). An earlier version of this section recommended `alert.suppress.fields=_time,host,Image,CommandLine` — that's broken, because `CommandLine` resolves to empty for every row, which breaks the suppress key. The correct recipe is **`_time,host,Image`** (sufficient because `_time` is per-event-unique). Surfaced 2026-05-19 during demo-recording prep; see `log.md` 2026-05-19 entry for the debugging arc.
+
+**UI gotcha — the suppress-fields textbox only appears when Trigger = "For each result".** In the Splunk web UI's Edit Alert dialog, when the Trigger row is set to "Once" (digest mode), the Throttle section shows only `Suppress triggering for: <duration>` — the per-row "Suppress results containing field value" textbox is **hidden**. Switching Trigger to "For each result" reveals the textbox. If you set Throttle without that textbox, the entire saved search is suppressed for the period (only one alert can fire per period, regardless of how many distinct events match), which is rarely what you want for per-event detections. **You can confirm which mode you're in at runtime** by checking the **Mode** column in Activity → Triggered Alerts: `Per Result` is correct; `Digest` means the saved search is in "Once" mode and the per-row suppress is inactive.
+
+**For D1's worked example (T1059.001), neither option was originally applied** — the lab accepted duplicates as a learning-loop trade-off. **For T1059.003 (added 2026-05-20), Option B with the corrected key was applied from the start.** See [[../../detections/t1059-003-cmd-suspicious-ioc-references]] for the configuration as deployed.
 
 ### "Splunk daily license cap hit"
 

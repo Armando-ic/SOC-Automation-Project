@@ -63,9 +63,54 @@ Do this before any portfolio publishing (already done for AbuseIPDB on 2026-05-1
 4. **Update `SOC-Automation-Project.md`** with new values for everything else.
 5. **Update Claude Desktop config** (`claude_desktop_config.json`) with new `mcpuser` password.
 6. **Update Claude Code project MCP config** with new password: `claude mcp remove splunk -s local && claude mcp add splunk -s local ...`.
-7. **Update n8n credentials** through the n8n web UI (Settings → Credentials) for each external service.
-8. **Verify** every connection — Claude in n8n, the two enrichment tools, the IRIS API node, and the Splunk MCP — before deleting the old credentials at their origin.
+7. **Update n8n credentials** through the n8n web UI (left nav → **Credentials**, NOT a workflow). Enumerate every external service the workflow references — `SOC-Triage-v3` currently has these:
+   - **Anthropic API** — paste the new Claude API key into the credential. Test connection (n8n's button) if available.
+   - **AbuseIPDB API** — paste the new AbuseIPDB key.
+   - **VirusTotal API** — paste the new VirusTotal key. See "VirusTotal account caveat" below.
+   - **DFIR-Iris API** — paste the new Iris service-account token, plus the Iris base URL if it changed.
+
+   The Anthropic credential is the one most commonly forgotten — Claude is invoked by the `Message a model` node (not a separately-named HTTP node), and the credential isn't visible from the workflow canvas unless you click into that node. **If `Message a model` fails with "Authorization failed - User is inactive" at runtime, the n8n Anthropic credential is the suspect.**
+
+   Cleanup: in the same Credentials view, remove any stale per-service credentials left over from previous rotation attempts (e.g., `VirusTotal account 2`, `VirusTotal account 3`). Multiple same-typed credentials are an anti-pattern; workflow nodes can end up wired to the wrong one. Keep exactly one credential per service.
+
+8. **Verify** every connection by firing a real synthetic alert through the pipeline:
+   - Fire the T1059.003 cmd.exe synthetic on Win10-v2 (see [[../detections/t1059-003-cmd-suspicious-ioc-references]] for the exact command).
+   - Wait one cron tick.
+   - Check the n8n execution canvas: every node should be green, including the dashed-line tool nodes (`enrich_ip_abuseipdb`, `lookup_file_hash_virustotal`, `submit_triage_result`).
+   - Check IRIS for a new alert with populated `Enriched IOCs` section.
+   - Splunk MCP separately: run a quick query via Claude Desktop or Claude Code to confirm the MCP connection still works after credential changes.
+
 9. **Audit shell history** — `Get-History | Select-String -Pattern 'sk-ant|<old-pw-pattern>'` and clear any matches.
+
+### VirusTotal account caveat (surfaced 2026-05-19)
+
+VirusTotal's free tier enforces a stricter account-state regime than the other enrichment APIs in this workflow:
+
+- **Accounts can be deactivated** by VT (no warning, surfaced via a "Welcome" + "Deactivated" email pair). Hotmail-account VT was deactivated and unable to re-register (cooldown on the email address).
+- **New accounts may not auto-send a verification email** (Gmail signups have been observed not to receive one). The API key from such an account is sometimes still valid — confirm via direct curl before assuming the key is bad.
+
+**Diagnostic curl when VT is the suspect:**
+
+```powershell
+# PowerShell on host PC (no VMs needed). Replace KEY with the candidate VT key
+# from SOC-Automation-Project.md.
+$key  = "PASTE_VT_KEY_HERE"
+$hash = "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f"  # EICAR SHA-256
+try {
+    $r = Invoke-RestMethod -Uri "https://www.virustotal.com/api/v3/files/$hash" `
+        -Headers @{ "x-apikey" = $key } -ErrorAction Stop
+    $s = $r.data.attributes.last_analysis_stats
+    Write-Host "OK - ratio: $($s.malicious)/$($s.malicious + $s.undetected + $s.suspicious + $s.harmless)"
+} catch {
+    Write-Host "FAILED - Status: $($_.Exception.Response.StatusCode.value__) - $($_.ErrorDetails.Message)"
+}
+$key = $null; Clear-History
+```
+
+- **`OK - ratio: 65/72`** (or similar) → VT account is fine; the failure is on n8n's side (stale credential reference in the workflow, or the wrong credential selected in the VT tool node).
+- **`FAILED - Status: 401 - User is inactive`** → VT account itself is dead; create a new one on a different email.
+
+The 2026-05-19 incident: the message "Authorization failed - User is inactive" surfaced inside n8n's `lookup_file_hash_virustotal` node and superficially looked like a VT-side problem. The curl test isolated it as an n8n credential-wiring issue (the VT tool was pointing at an old/deleted credential), not VT itself. **Always run the curl test first when VT fails — it eliminates half the diagnosis tree in 30 seconds.**
 
 ## What `.env` does NOT hold
 
