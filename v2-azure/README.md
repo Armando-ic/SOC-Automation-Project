@@ -2,6 +2,8 @@
 
 This branch implements the same end-to-end SOC pipeline as `main` (Splunk + n8n + DFIR-Iris on private VMware NAT) but on Azure-native tooling. The two branches together form a comparison narrative: *"Same end-to-end SOC pipeline in two stacks — what translated and what didn't."*
 
+**Living architecture diagram:** [architecture/current-state.md](architecture/current-state.md) — Mermaid diagram of what's provisioned vs. what's still being built. Updated as components come online.
+
 ## Side-by-side architecture (current target)
 
 | Layer | v1 (`main` branch) | v2-Azure (this branch) |
