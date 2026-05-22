@@ -10,10 +10,10 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
       "position": [
-        -240,
-        -192
+        0,
+        0
       ],
-      "id": "0a36b634-8b05-4527-8249-12792250176f",
+      "id": "b038ef22-0291-4076-a875-cb66fafdda3e",
       "name": "Webhook",
       "webhookId": "db7245f7-8451-4bea-b47d-f6ad35b818cd"
     },
@@ -39,23 +39,23 @@
       "type": "@n8n/n8n-nodes-langchain.anthropic",
       "typeVersion": 1,
       "position": [
-        48,
-        -192
+        288,
+        0
       ],
-      "id": "c2672b33-42c9-4445-a84f-091f147099b3",
+      "id": "2ec14191-e61e-4dee-93ae-de91fad335c3",
       "name": "Message a model",
       "retryOnFail": true,
       "waitBetweenTries": 5000,
       "credentials": {
         "anthropicApi": {
-          "id": "VozkiMP8QqbykLLj",
+          "id": "WJgKEqTjv7rohfYB",
           "name": "Anthropic account"
         }
       }
     },
     {
       "parameters": {
-        "toolDescription": "Look up an IP address in AbuseIPDB to check if it has been reported for malicious activity. Returns abuse confidence score, country, ISP, and recent report counts. Use for any external/public IP encountered in the alert. Skip for RFC1918 private IPs (10.x, 172.16-31.x, 192.168.x) \u2014 they return no useful data.\n",
+        "toolDescription": "Look up an IP address in AbuseIPDB to check if it has been reported for malicious activity. Returns abuse confidence score, country, ISP, and recent report counts. Use for any external/public IP encountered in the alert. Skip for RFC1918 private IPs (10.x, 172.16-31.x, 192.168.x) — they return no useful data.\n",
         "url": "https://api.abuseipdb.com/api/v2/check",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
@@ -89,15 +89,15 @@
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.4,
       "position": [
-        -32,
-        32
+        208,
+        224
       ],
-      "id": "04fa7282-28d1-489c-b4e1-af39b6ec3c4f",
+      "id": "90a4fe84-a107-4b41-ad9f-4df3ba742e23",
       "name": "enrich_ip_abuseipdb",
       "credentials": {
         "httpHeaderAuth": {
-          "id": "Y4WuoJifIcStqSTi",
-          "name": "AbuseIPDB account"
+          "id": "bSoblQN7fU64kUV8",
+          "name": "Header Auth account"
         }
       }
     },
@@ -121,14 +121,14 @@
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.4,
       "position": [
-        176,
-        32
+        416,
+        224
       ],
-      "id": "b673e894-5809-469c-82f2-38056bc04061",
+      "id": "998e7810-45f0-47ee-96e0-798ab818bdb8",
       "name": "lookup_file_hash_virustotal",
       "credentials": {
         "virusTotalApi": {
-          "id": "MPJtvrtzx8nfI5Ot",
+          "id": "G61CzAhcC7ZyOJUW",
           "name": "VirusTotal account"
         }
       }
@@ -144,10 +144,10 @@
       "type": "@n8n/n8n-nodes-langchain.toolCode",
       "typeVersion": 1.3,
       "position": [
-        384,
-        32
+        624,
+        224
       ],
-      "id": "6273b502-0dda-4455-a516-978b2cc72b1a",
+      "id": "fba5cfb9-78cd-4155-ae17-0096a23f8d1f",
       "name": "submit_triage_result"
     },
     {
@@ -157,10 +157,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        448,
-        -192
+        688,
+        0
       ],
-      "id": "b3e1823f-216e-4d28-8deb-4dd7fdb29c8e",
+      "id": "21f1870a-7a39-4360-bfb6-d5b4db476ab2",
       "name": "Extract Triage Result"
     },
     {
@@ -214,16 +214,16 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        672,
-        -192
+        912,
+        0
       ],
-      "id": "1bf38ff3-9822-4d83-a3a8-b878f9316838",
+      "id": "b4e849b7-e482-497b-a77c-e482fdda9147",
       "name": "Create Iris Alert",
       "extendsCredential": "dfirIrisApi",
       "alwaysOutputData": true,
       "credentials": {
         "dfirIrisApi": {
-          "id": "rwvgiJMaHqI9hCC9",
+          "id": "qKoTJhuXP8yMwOON",
           "name": "DFIR-IRIS account"
         }
       }
@@ -273,7 +273,7 @@
                 "schema_version": "v1",
                 "alert_summary": "External brute-force attempt against host DESKTOP-VNEF7PC: 47 failed Windows logon events (EventCode 4625) targeting user 'mydfir' from 185.220.101.42, a known Tor exit node with 91% AbuseIPDB confidence and extensive SSH/RDP brute-force history.",
                 "severity": "high",
-                "severity_rationale": "Source IP is a confirmed Tor exit node (tor-exit-42.for-privacy.net) with very high abuse score (91%) and 92 reports across 52 distinct users for brute-force activity. 47 failed logons against a single account in a short window is a clear active brute-force pattern from an external untrusted source. Severity is high (not critical) because the alert reflects only failed attempts (4625) \u2014 no evidence of a successful authentication (4624) was provided. If a successful logon is confirmed, escalate to critical.",
+                "severity_rationale": "Source IP is a confirmed Tor exit node (tor-exit-42.for-privacy.net) with very high abuse score (91%) and 92 reports across 52 distinct users for brute-force activity. 47 failed logons against a single account in a short window is a clear active brute-force pattern from an external untrusted source. Severity is high (not critical) because the alert reflects only failed attempts (4625) — no evidence of a successful authentication (4624) was provided. If a successful logon is confirmed, escalate to critical.",
                 "mitre_techniques": [
                   {
                     "id": "T1110",
@@ -397,16 +397,16 @@
       ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
     "executionOrder": "v1",
-    "binaryMode": "separate",
-    "availableInMCP": false,
-    "timeSavedMode": "fixed",
-    "saveDataErrorExecution": "all",
-    "saveDataSuccessExecution": "all",
-    "callerPolicy": "workflowsFromSameOwner",
-    "executionTimeout": 2100
+    "binaryMode": "separate"
   },
+  "versionId": "6ed759e9-69c1-4575-b8e8-4a2e4ebb9ab1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c1c3fc81f610423f4b712ea549e51312677a3e55fd95d018a172c6f3a05b6fd7"
+  },
+  "id": "EY9dpmr896n24Y85",
   "tags": []
 }
