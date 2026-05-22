@@ -14,7 +14,10 @@ To add a technique: copy `_template.md` to `t<id>-<short-name>.md` (with dots co
 
 | Technique ID | Tactic | Status | Last Run | Page |
 |---|---|---|---|---|
-| T1059.001 | Execution | saved-search-active | 2026-04-30 | [[t1059-001-powershell-encoded]] |
+| T1059.001 | Execution | saved-search-active *(currently disabled — see notes)* | 2026-05-12 | [[t1059-001-powershell-encoded]] |
+| T1059.003 | Execution | saved-search-active | 2026-05-20 | [[t1059-003-cmd-suspicious-ioc-references]] |
+
+**Note on T1059.001 disable state:** the saved search was temporarily disabled during the 2026-05-19/20 recording-prep session to avoid duplicate-alert noise during the demo (T1059.003 was created as the demo path because it naturally exercises both enrichment tools). The T1059.001 detection itself is still valid; re-enable as part of post-recording cleanup with corrected throttle settings (see [[../subprojects/2026-04-30-detection-foundations/runbook]] §Recoveries).
 
 ## Status lifecycle
 
