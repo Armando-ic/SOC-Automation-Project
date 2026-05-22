@@ -13,21 +13,22 @@ This branch implements the same end-to-end SOC pipeline as `main` (Splunk + n8n 
 | **SOAR** | n8n on Ubuntu Server 24.04 (docker-compose) | Logic Apps OR Azure Functions (decision in Phase 2) |
 | **AI triage** | Claude API (Opus 4.7) with tool-use: VirusTotal + AbuseIPDB enrichment + `submit_triage_result` structured-output schema | Same Claude API contract — only the SOAR invocation layer changes |
 | **Case management** | DFIR-Iris v2.4.22 (Ubuntu / docker-compose) | TBD Phase 2 — either keep DFIR-Iris cross-cloud, or replace with Microsoft Defender XDR / Sentinel-native incidents |
-| **Lab infrastructure** | VMware Workstation Pro, private NAT subnet `192.168.129.0/24` | Azure subscription on `owner@example.com`, **East US** region |
+| **Lab infrastructure** | VMware Workstation Pro, private NAT subnet `192.168.129.0/24` | Azure subscription on `owner@example.com`, **Central US** region |
 | **Working comparison detection** | T1059.001 PowerShell Encoded Command — Splunk saved search → n8n webhook → Claude → IRIS alert #4 (validated 2026-05-12) | T1059.001 ported to KQL — first end-to-end alert firing in v2 is the Phase 1 goal |
 
 ## Locked design decisions (2026-05-22)
 
 - **Endpoint approach:** Pure Azure (new Azure Windows VM ingesting via AMA). Not hybrid; not forwarding from the existing on-prem Win10. Cleanest parallel-implementation narrative.
-- **Region:** East US (cheaper, lower latency from NoVA, general-purpose). Not East US 2 — federal-aligned region was the only reason to consider it, and the v2-Azure work is portfolio, not contract-bound.
+- **Region:** Central US. Originally East US (cheaper, lower latency from NoVA, general-purpose) — moved 2026-05-22 because the Free Trial subscription had zero vCPU quota in East US across all VM families. Microsoft Q&A confirms Free Trial subs cannot request quota increases — only path was either a region change or upgrading to PAYG. Central US verified to have D-series v7 availability before teardown. Latency from NoVA is ~10ms worse than East US (still imperceptible for lab work); pricing is identical. Not East US 2 — federal-aligned region was the only reason to consider it, and the v2-Azure work is portfolio, not contract-bound.
 - **Repo structure:** This branch (`v2-azure`) of the existing `SOC-Automation-Project` repo. Not a separate repo. Comparison narrative is much stronger when both implementations live side-by-side in one repo's branch view.
+- **Windows VM size:** `Standard_D4as_v7` (4 vCPU / 16 GiB, AMD EPYC). Originally targeted `Standard_D4s_v5` — substituted to v7-family AMD variant because that's what the Free Trial in Central US made available. Functionally equivalent for the AMA + Sysmon workload, ~15% cheaper than the Intel equivalent. Full spec at [`infrastructure/vm-soc-v2-win.md`](infrastructure/vm-soc-v2-win.md).
 
 ## Phase 1 — Foundation (active)
 
-- [ ] Azure subscription confirmed active (owner@example.com tenant)
-- [ ] Log Analytics workspace created in East US
-- [ ] Microsoft Sentinel onboarded to the Log Analytics workspace
-- [ ] Azure Windows VM provisioned in East US
+- [x] Azure subscription confirmed active (owner@example.com tenant)
+- [x] Log Analytics workspace created in Central US
+- [x] Microsoft Sentinel onboarded to the Log Analytics workspace
+- [x] Azure Windows VM provisioned in Central US (2026-05-22) — see [`infrastructure/vm-soc-v2-win.md`](infrastructure/vm-soc-v2-win.md)
 - [ ] Azure Monitor Agent (AMA) installed on the VM
 - [ ] Data Collection Rule (DCR) configured to ship Windows Security / System / Application + Sysmon events into the Sentinel workspace
 - [ ] Confirm events visible in Sentinel logs (`SecurityEvent` table or `Event` table depending on data source)

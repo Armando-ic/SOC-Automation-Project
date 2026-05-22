@@ -1,6 +1,6 @@
 # v2-Azure architecture — current state
 
-**Last updated:** 2026-05-22 (Phase 1, just after Sentinel onboarding)
+**Last updated:** 2026-05-22 (Phase 1, after Central US migration + Windows VM provisioned)
 
 This is the *living* Phase 1 build diagram. It evolves as components come online. For the v1 vs v2-Azure side-by-side comparison see [../README.md](../README.md).
 
@@ -10,8 +10,8 @@ This is the *living* Phase 1 build diagram. It evolves as components come online
 flowchart TB
     subgraph Tenant["Default Directory (analysthotmail.onmicrosoft.com)"]
         subgraph Sub["Azure subscription 1 — Free Trial ($200, ~30 days remaining)"]
-            subgraph RG["Resource Group: rg-soc-v2-azure-east-us (East US)"]
-                VM["Windows VM"]:::pending
+            subgraph RG["Resource Group: rg-soc-v2-azure-central-us (Central US)"]
+                VM["Windows VM<br/>vm-soc-v2-win<br/>(D4as_v7, Win Srv 2025)"]:::done
                 AMA["Azure Monitor Agent<br/>(installed on VM)"]:::pending
                 DCR["Data Collection Rule<br/>(routes events)"]:::pending
                 LAW["Log Analytics workspace<br/>law-soc-v2-azure"]:::done
@@ -40,7 +40,7 @@ flowchart TB
 
 ## Component notes
 
-- **Windows VM:** Azure-native (not a hybrid forward from existing on-prem Win10). Size + image are the next blocker — VM compute is the biggest free-trial credit burn, so sizing matters. Recommendation TBD in the next session: likely `Standard_B2s` (2 vCPU / 4 GB) with auto-shutdown enabled.
+- **Windows VM (`vm-soc-v2-win`):** Azure-native (not a hybrid forward from existing on-prem Win10). Standard_D4as_v7 (4 vCPU / 16 GiB, AMD EPYC), Windows Server 2025 Datacenter, Premium SSD LRS, auto-shutdown enabled at 23:59 UTC. Provisioned 2026-05-22. NSG restricts RDP to a single operator source IP — no public exposure beyond that. Full spec at [`../infrastructure/vm-soc-v2-win.md`](../infrastructure/vm-soc-v2-win.md).
 - **Azure Monitor Agent (AMA):** Replaces the legacy Log Analytics agent (deprecated). Installs as a VM extension; configuration lives in Data Collection Rules rather than per-machine. This is cleaner than the v1 Splunk Universal Forwarder model where agent install and filter logic were intertwined in `inputs.conf`.
 - **Data Collection Rule (DCR):** Defines *what* events get sent from *which* sources to *which* workspace. Decoupled from agent install. For Phase 1 the DCR will ship Windows Security / System / Application channels + Sysmon channel events to `law-soc-v2-azure`.
 - **Log Analytics workspace (`law-soc-v2-azure`):** Just provisioned. Pay-as-you-go pricing tier — first 5 GB/month is free under the trial subscription's free tier, and 5 GB/day stays free on the SIEM ingestion side even after Free Trial credits expire.

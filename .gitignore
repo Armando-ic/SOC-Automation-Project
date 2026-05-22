@@ -10,6 +10,10 @@ vault/.trash/
 .env.local
 *.env
 
+# Per-machine secret docs — convention: any *.local.md is local-only, never committed
+# (used by v2-azure/secrets.local.md and any future per-environment credential docs)
+*.local.md
+
 # Vendored third-party Splunk MCP (kept on disk for local dev; referenced by upstream URL in README — not redistributed in this repo)
 splunk-mcp-main/
 
