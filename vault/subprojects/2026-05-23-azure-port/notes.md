@@ -44,6 +44,18 @@ Append entries as work progresses. Newest at the top.
 
 **Plan impact:** The fresh-install rationale ("reset the trial clock") is now incidental — the install still uses Trial briefly before swapping to Developer. Spec §"Approach" Splunk paragraph is now historical context, not active constraint. Update spec only if it becomes confusing later; not worth a churn commit today.
 
+## VMs provisioned
+
+| VM | Public IP | Private IP | Size | NIC name | Provisioned (Eastern) |
+|---|---|---|---|---|---|
+| vm-soc-v2-splunk | `20.236.193.253` | `10.0.0.5` | Standard_D4s_v3 | `vm-soc-v2-splunk843` | 2026-05-23 4:29 PM |
+
+**SSH key:** `C:\Users\Owner\.ssh\vm-soc-v2-linux-key.pem` (RSA, generated during Task 6, will be reused for n8n + IRIS VMs).
+
+**OS disk:** `vm-soc-v2-splunk_OsDisk_1_68042d8f0c8841f0ba830dbbb9711cdc` (Premium SSD, 64 GiB, delete-with-VM enabled).
+
+**Image baseline:** Canonical `ubuntu-24_04-lts/server`, Gen2, Trusted launch (Secure boot + vTPM, Integrity monitoring off).
+
 ## Things to track during build
 
 - `vm-soc-v2-win` is currently Stopped (deallocated). Auto-shutdown is doing its job. Will need to start it before Task 12 (Sysmon UF re-point) and Task 19 end-to-end verify.
