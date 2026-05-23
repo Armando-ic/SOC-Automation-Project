@@ -34,10 +34,15 @@ Append entries as work progresses. Newest at the top.
 ## Splunk Dev License application (Task 1) — 2026-05-23
 
 - Submitted: **2026-05-23 3:36 PM** at https://dev.splunk.com/enterprise/
-- Splunk response page indicated **3–5 business day** approval window (Splunk's stated SLA, not the plan's 7-day rule of thumb).
-- Confirmation email: not yet received at submission — check inbox within 2 hours; if still missing tomorrow morning, may need to re-submit or contact Splunk support.
-- Follow-up reminder: **2026-06-03** (7 business days out, conservative ceiling on Splunk's 3–5 day SLA).
-- Status: `pending`.
+- **Received: 2026-05-23 5:01 PM** (~90 min turnaround — far faster than Splunk's stated 3–5 business day SLA).
+- License file: `Splunk.License` (2 KB attachment from `noreply@splunk.com`).
+- Product: **Splunk Developer Personal License** (NOT FOR RESALE).
+- Size: **10 GB/day** indexing volume.
+- Expiration: **2026-11-19** 11:59 PM (6 months).
+- Renewal: same form at https://dev.splunk.com/enterprise/, eligible within 10 days before expiry.
+- Status: **received** — apply during Task 8 (post fresh install) via Splunk UI → Settings → Licensing → Change license group → Enterprise → install license XML. Trial-clock fallback no longer needed; Developer License is the long-term-stable target as planned.
+
+**Plan impact:** The fresh-install rationale ("reset the trial clock") is now incidental — the install still uses Trial briefly before swapping to Developer. Spec §"Approach" Splunk paragraph is now historical context, not active constraint. Update spec only if it becomes confusing later; not worth a churn commit today.
 
 ## Things to track during build
 
