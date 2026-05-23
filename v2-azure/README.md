@@ -23,19 +23,36 @@ This branch implements the same end-to-end SOC pipeline as `main` (Splunk + n8n 
 - **Repo structure:** This branch (`v2-azure`) of the existing `SOC-Automation-Project` repo. Not a separate repo. Comparison narrative is much stronger when both implementations live side-by-side in one repo's branch view.
 - **Windows VM size:** `Standard_D4as_v7` (4 vCPU / 16 GiB, AMD EPYC). Originally targeted `Standard_D4s_v5` — substituted to v7-family AMD variant because that's what the Free Trial in Central US made available. Functionally equivalent for the AMA + Sysmon workload, ~15% cheaper than the Intel equivalent. Full spec at [`infrastructure/vm-soc-v2-win.md`](infrastructure/vm-soc-v2-win.md).
 
-## Phase 1 — Foundation (active)
+## Phase 1 — Foundation (COMPLETE — 2026-05-22)
 
 - [x] Azure subscription confirmed active (owner@example.com tenant)
 - [x] Log Analytics workspace created in Central US
 - [x] Microsoft Sentinel onboarded to the Log Analytics workspace
 - [x] Azure Windows VM provisioned in Central US (2026-05-22) — see [`infrastructure/vm-soc-v2-win.md`](infrastructure/vm-soc-v2-win.md)
-- [ ] Azure Monitor Agent (AMA) installed on the VM
-- [ ] Data Collection Rule (DCR) configured to ship Windows Security / System / Application + Sysmon events into the Sentinel workspace
-- [ ] Confirm events visible in Sentinel logs (`SecurityEvent` table or `Event` table depending on data source)
-- [ ] Port T1059.001 PowerShell Encoded Command detection from Splunk SPL → KQL; save as Analytics Rule in Sentinel
-- [ ] Fire the detection end-to-end (Atomic Red Team test on the VM → AMA → Sentinel → analytics rule trigger → Sentinel incident)
-- [ ] Document the side-by-side detection in `detections/t1059-001-powershell-encoded-azure.md`
+- [x] Azure Monitor Agent (AMA) installed on the VM (AzureMonitorWindowsAgent 1.42.0.0 — pushed automatically via DCR association, no manual install)
+- [x] Data Collection Rule (DCR) `dcr-soc-v2-windows-events` configured to ship Application + Security + System + Sysmon Operational channels into the Sentinel workspace (Custom XPath data source)
+- [x] Confirmed events visible in Sentinel logs (`Event` table; note: Security channel also routes to `Event` rather than `SecurityEvent` because Custom XPath collects everything into the generic table — see Phase 1 detection doc for the SecurityEvent vs Event tradeoff discussion)
+- [x] T1059.001 PowerShell Encoded Command detection ported from Splunk SPL → KQL; saved as Sentinel Analytics Rule (5-min schedule, 5-min lookback, per-result alerting, 4 entity mappings)
+- [x] Detection fired end-to-end on Atomic Red Team Test 15 (ATH harness) → Sentinel Incident #10 (event 8:11:18 PM → incident 8:20:42 PM, 9m24s latency)
+- [x] Documented in [`detections/t1059-001-powershell-encoded-azure.md`](detections/t1059-001-powershell-encoded-azure.md) with full v1↔v2 comparison commentary; reusable KQL artifact at [`detections/kql/t1059-001-powershell-encoded.kql`](detections/kql/t1059-001-powershell-encoded.kql)
 - [ ] Natural AZ-900 readiness check at end of phase
+
+## Phase 1 results (2026-05-22)
+
+| Parity dimension | v1 (Splunk + n8n) | v2 (Sentinel + AMA Custom XPath) | Verdict |
+|---|---|---|---|
+| Sysmon binary version | 15.20 | 15.20 | identical |
+| Sysmon config (SHA256-verified) | `055FEBC6...87162` | `055FEBC6...87162` | bit-identical |
+| Detection regex string | `(?i)\s-e[ncodedommand]*\s` | `(?i)\s-e[ncodedommand]*\s` | identical |
+| ATH Test 15 ParentImage | `wbem\WmiPrvSE.exe` | `wbem\WmiPrvSE.exe` | identical (ATH 1.12.0.0 still WMI-spawns) |
+| Schedule + per-result + duplicate-tick gotcha | "For each result" with no dedupe | "Trigger an alert for each event" with no dedupe | identical semantics |
+| Field extraction | Automatic via `Splunk_TA_microsoft_sysmon` | **Manual XML regex per query** | **major friction in v2** |
+| Detection query length | 5 lines SPL | 12 lines KQL | 2.4× longer in v2 |
+| Ingestion latency | ~5 sec | ~5–10 min | v2 regression at low volume |
+| Alert→Incident hop | Webhook → n8n → Iris | Native (Sentinel Incident) | v2 simpler |
+| Entity graph | n/a | first-class (Host, Account, Process×2) | v2 free win |
+
+**Full commentary** in [`detections/t1059-001-powershell-encoded-azure.md#v1--v2-comparison-the-portfolio-value`](detections/t1059-001-powershell-encoded-azure.md#v1--v2-comparison-the-portfolio-value).
 
 ## Phase 2 — SOAR layer (queued)
 

@@ -1,0 +1,28 @@
+// T1059.001 - PowerShell Encoded Command
+// Microsoft Sentinel Analytics Rule (Scheduled Query Rule)
+// KQL port of v1 Splunk saved search at vault/detections/t1059-001-powershell-encoded.md
+//
+// Pipeline assumed: Sysmon (SwiftOnSecurity config) on Windows endpoint →
+//                   AMA via Data Collection Rule with Custom XPath →
+//                   Log Analytics workspace (Event table)
+//
+// Rule schedule: every 5 minutes, 5-minute lookback (match the schedule to avoid
+// duplicate-incident creation across cron ticks for events still in lookback window).
+//
+// Detects powershell.exe invocations using -EncodedCommand or any of its abbreviated
+// variants (-e, -en, -enc, -encod, -encodedcommand). The regex matches `-e` followed
+// by zero or more letters drawn from {n,c,o,d,e,m,a} — this catches every legal
+// abbreviation while rejecting unrelated flag-shaped fragments like `-eq` or `-ed`.
+Event
+| where EventLog == "Microsoft-Windows-Sysmon/Operational"
+| where EventID == 1
+| extend Image = extract(@"Name=""Image"">([^<]+)</Data>", 1, EventData)
+| where Image endswith @"\powershell.exe"  // filter early before more expensive extracts
+| extend CommandLine = extract(@"Name=""CommandLine"">([^<]+)</Data>", 1, EventData)
+| where CommandLine matches regex @"(?i)\s-e[ncodedommand]*\s"
+| extend
+    ParentImage = extract(@"Name=""ParentImage"">([^<]+)</Data>", 1, EventData),
+    User        = extract(@"Name=""User"">([^<]+)</Data>", 1, EventData),
+    Hashes      = extract(@"Name=""Hashes"">([^<]+)</Data>", 1, EventData),
+    ProcessId   = extract(@"Name=""ProcessId"">([^<]+)</Data>", 1, EventData)
+| project TimeGenerated, Computer, User, Image, CommandLine, ParentImage, Hashes, ProcessId
