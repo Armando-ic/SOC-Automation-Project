@@ -59,9 +59,9 @@ Three Linux VMs currently running locally on VMware NAT subnet `192.168.129.0/24
 
 | Local VM | Local IP | Service | Stack |
 |---|---|---|---|
-| Splunk | 192.168.129.131 | Splunk Enterprise 10.2.2 | (host OS — verify Ubuntu vs Windows during brainstorming) |
+| Splunk (`MyDFIR-Splunk`) | 192.168.129.131 | Splunk Enterprise 10.2.2 | Ubuntu Server (per `vault/architecture/components/splunk.md`) |
 | n8n | 192.168.129.132 | n8n via docker-compose (currently SOC Triage v3 active) | Ubuntu Server 24.04 |
-| DFIR-Iris | 192.168.129.133 | DFIR-Iris 2.4.22 via docker-compose | Ubuntu (verify version) |
+| DFIR-Iris | 192.168.129.133 | DFIR-Iris 2.4.22 via docker-compose | Ubuntu (verify version during brainstorm) |
 
 **Phase 1 already replaced the Win10 endpoint** with the Azure-native `vm-soc-v2-win`. If the local Win10 VMware machine still exists and consumes C: drive space, also consider it for decommission — but it's already functionally replaced, so no migration work is needed for it.
 
@@ -138,14 +138,14 @@ No portal work was done during this session. No Azure resources were created. Th
 The most recent commits to `v2-azure` reflect the spec/plan/amendment work that's now deferred:
 
 ```
-<this commit>     docs(SOC-AP): pivot — lift-and-shift port to Azure as new Phase 2
-b418795           docs(v2-azure): amend Phase 2 plan to portal-only paths (no az CLI)
-ee60b0e           docs(v2-azure): add Phase 2 implementation plan (21 tasks, portal-driven)
-75a5207           docs(v2-azure): add Phase 2 SOAR Logic App design spec
-4861acc           feat(v2-azure): complete Phase 1 — T1059.001 detection firing end-to-end
-78c0b00           feat(v2-azure): migrate to Central US + provision Windows endpoint VM
-f55b053           docs(v2-azure): add living architecture diagram (Mermaid)
-af99d44           feat(v2-azure): scaffold branch with phase 1 spec and side-by-side architecture
+acedd79  docs(SOC-AP): pivot — port v1 to Azure as new Phase 2; defer Microsoft-native rewrite to Phase 3
+b418795  docs(v2-azure): amend Phase 2 plan to portal-only paths (no az CLI)
+ee60b0e  docs(v2-azure): add Phase 2 implementation plan (21 tasks, portal-driven)
+75a5207  docs(v2-azure): add Phase 2 SOAR Logic App design spec
+4861acc  feat(v2-azure): complete Phase 1 — T1059.001 detection firing end-to-end
+78c0b00  feat(v2-azure): migrate to Central US + provision Windows endpoint VM
+f55b053  docs(v2-azure): add living architecture diagram (Mermaid)
+af99d44  feat(v2-azure): scaffold branch with phase 1 spec and side-by-side architecture
 ```
 
-Branch is **N commits ahead of `origin/v2-azure`** as of the pivot commit. Not pushed yet. User holds push authorization.
+Branch is **4 commits ahead of `origin/v2-azure`** as of the pivot commit (`acedd79`). Not pushed yet. User holds push authorization.
