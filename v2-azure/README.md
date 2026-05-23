@@ -1,5 +1,8 @@
 # SOC_Automation_Project — v2-Azure (Microsoft Sentinel + Azure-native implementation)
 
+> **⏸ Phase 2 (Microsoft-native SOAR) is DEFERRED as of 2026-05-23.**
+> A new intermediate phase — **Port to Azure** — lift-and-shifts v1 (Splunk + n8n + DFIR-Iris) from local VMware to Azure IaaS first. Read [`../SOC-Automation-Project-to-Azure-Port.md`](../SOC-Automation-Project-to-Azure-Port.md) for the active direction. The v2-azure Microsoft-native work in this branch resumes *after* that port stabilizes.
+
 This branch implements the same end-to-end SOC pipeline as `main` (Splunk + n8n + DFIR-Iris on private VMware NAT) but on Azure-native tooling. The two branches together form a comparison narrative: *"Same end-to-end SOC pipeline in two stacks — what translated and what didn't."*
 
 **Living architecture diagram:** [architecture/current-state.md](architecture/current-state.md) — Mermaid diagram of what's provisioned vs. what's still being built. Updated as components come online.
@@ -16,9 +19,10 @@ This branch implements the same end-to-end SOC pipeline as `main` (Splunk + n8n 
 | **Lab infrastructure** | VMware Workstation Pro, private NAT subnet `192.168.129.0/24` | Azure subscription on `owner@example.com`, **Central US** region |
 | **Working comparison detection** | T1059.001 PowerShell Encoded Command — Splunk saved search → n8n webhook → Claude → IRIS alert #4 (validated 2026-05-12) | T1059.001 ported to KQL — first end-to-end alert firing in v2 is the Phase 1 goal |
 
-## Locked design decisions (2026-05-22)
+## Locked design decisions (2026-05-22, with 2026-05-23 reversal noted)
 
-- **Endpoint approach:** Pure Azure (new Azure Windows VM ingesting via AMA). Not hybrid; not forwarding from the existing on-prem Win10. Cleanest parallel-implementation narrative.
+- **Endpoint approach:** Pure Azure (new Azure Windows VM ingesting via AMA). Not hybrid; not forwarding from the existing on-prem Win10. Cleanest parallel-implementation narrative. **(For the Phase 1 endpoint — still valid for `vm-soc-v2-win`.)**
+- **2026-05-23 reversal — broader "no v1 migration" stance:** The original framing assumed v1 stayed entirely on local VMware as the comparison baseline. Reversed 2026-05-23: the user is now lift-and-shifting the full v1 stack (Splunk + n8n + DFIR-Iris) to Azure IaaS before the Microsoft-native rewrite resumes. Primary driver: free up local C: drive space. Secondary driver: broader Azure exposure. The Phase 1 Azure endpoint (`vm-soc-v2-win`) stays as-is; this reversal is about the *other three v1 VMs* the original decision excluded. See [`../SOC-Automation-Project-to-Azure-Port.md`](../SOC-Automation-Project-to-Azure-Port.md) for the new Phase 2 scope.
 - **Region:** Central US. Originally East US (cheaper, lower latency from NoVA, general-purpose) — moved 2026-05-22 because the Free Trial subscription had zero vCPU quota in East US across all VM families. Microsoft Q&A confirms Free Trial subs cannot request quota increases — only path was either a region change or upgrading to PAYG. Central US verified to have D-series v7 availability before teardown. Latency from NoVA is ~10ms worse than East US (still imperceptible for lab work); pricing is identical. Not East US 2 — federal-aligned region was the only reason to consider it, and the v2-Azure work is portfolio, not contract-bound.
 - **Repo structure:** This branch (`v2-azure`) of the existing `SOC-Automation-Project` repo. Not a separate repo. Comparison narrative is much stronger when both implementations live side-by-side in one repo's branch view.
 - **Windows VM size:** `Standard_D4as_v7` (4 vCPU / 16 GiB, AMD EPYC). Originally targeted `Standard_D4s_v5` — substituted to v7-family AMD variant because that's what the Free Trial in Central US made available. Functionally equivalent for the AMA + Sysmon workload, ~15% cheaper than the Intel equivalent. Full spec at [`infrastructure/vm-soc-v2-win.md`](infrastructure/vm-soc-v2-win.md).

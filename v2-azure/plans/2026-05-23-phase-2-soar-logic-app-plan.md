@@ -1,5 +1,7 @@
 # Phase 2 — SOAR Layer (Logic Apps) Implementation Plan
 
+> **⏸ DEFERRED 2026-05-23.** Originally labeled "Phase 2." A new intermediate phase — **Port to Azure** (lift-and-shift v1 to Azure IaaS) — was inserted as the new Phase 2 later the same day. This plan becomes **Phase 3** and resumes only after the port is stable. Plan content is unchanged and still valid; only execution timing and phase number change. Active direction: [`../../SOC-Automation-Project-to-Azure-Port.md`](../../SOC-Automation-Project-to-Azure-Port.md). Execution history before deferral: branch state verified (Task 1 Step 1), no portal work performed.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Ship the Microsoft-native equivalent of v1's SOC Triage v3 n8n workflow — a single Azure Logic App (Consumption) that triages Sentinel incidents tagged `automation:claude-triage` via Claude tool-use (AbuseIPDB + VirusTotal enrichment, structured triage output) and writes back to the Sentinel incident.

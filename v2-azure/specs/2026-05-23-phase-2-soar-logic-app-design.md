@@ -1,9 +1,13 @@
 ---
-status: draft
+status: deferred
 created: 2026-05-23
+deferred: 2026-05-23
 ---
 
+> **⏸ Deferred 2026-05-23.** Originally labeled "Phase 2." A new intermediate phase — **Port to Azure** (lift-and-shift v1 to Azure IaaS) — was inserted as the new Phase 2 later the same day. This spec becomes **Phase 3** once that port is stable. Content of the spec is unchanged and still applies; only the phase number and execution timing change. See [`../../SOC-Automation-Project-to-Azure-Port.md`](../../SOC-Automation-Project-to-Azure-Port.md) for current direction.
+
 **Related:**
+- [SOC-Automation-Project Port to Azure (active direction)](../../SOC-Automation-Project-to-Azure-Port.md)
 - [v2-azure README](../README.md)
 - [v2-azure architecture (Phase 1)](../architecture/current-state.md)
 - [Phase 1 detection doc — T1059.001 KQL port](../detections/t1059-001-powershell-encoded-azure.md)
