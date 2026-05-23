@@ -56,6 +56,32 @@ Append entries as work progresses. Newest at the top.
 
 **Image baseline:** Canonical `ubuntu-24_04-lts/server`, Gen2, Trusted launch (Secure boot + vTPM, Integrity monitoring off).
 
+## Task 8 — Splunk install complete (2026-05-23 5:26 PM Eastern)
+
+- **Version installed:** Splunk Enterprise **10.4.0** (build `f798d4d49089`). Plan called for 10.2.2 but the live downloads page only offered 10.4.0 today — acceptable per "any 10.x stable" stance during planning. Pin **10.4.0** as the runbook baseline.
+- **Download URL pinned:** `https://download.splunk.com/products/splunk/releases/10.4.0/linux/splunk-10.4.0-f798d4d49089-linux-amd64.deb`
+- **Splunk user:** runs as `splunk:splunk` via systemd unit `Splunkd.service`. Use `sudo systemctl restart Splunkd` for service lifecycle. CLI commands (e.g. `splunk add user`) hit the management API on 8089 with `-auth admin:<pw>` and are user-context-agnostic.
+- **Boot-start:** enabled via systemd (`/etc/systemd/system/Splunkd.service`).
+- **mydfir admin user:** created (password reused from v1 secrets convention).
+- **Receiver port 9997:** listening on `0.0.0.0:9997` for forwarder traffic.
+- **Splunk Web:** `http://20.236.193.253:8000` (NSG-restricted to home IP).
+- **Management API:** `https://10.0.0.5:8089` (internal); not exposed to internet.
+
+### License status
+- **Active group:** Enterprise (was Trial during initial start; swapped automatically when the Developer License was added — no manual `splunk edit licenser-groups` needed).
+- **Stack:** `enterprise`.
+- **License applied:** "Splunk Developer Personal License DO NOT DISTRIBUTE" — quota 10 GB/day, expires 2026-11-19 23:59:59 UTC.
+- **Trial license:** auto-deactivated; Embedded/Free/Lite/Forwarder groups inactive (default).
+
+### Gotchas discovered during install (worth carrying forward)
+- **Splunk 10.4 hard-deprecates run-as-root.** Running `sudo /opt/splunk/bin/splunk start ...` aborts immediately with "Running Splunk Enterprise as root is deprecated… To run as root, use the --run-as-root option." Use `sudo -u splunk /opt/splunk/bin/splunk ...` for first-start lifecycle commands.
+- **dpkg postinst leaves bundled libs root-owned.** After `dpkg -i splunk.deb`, many shared libs under `/opt/splunk/opt/`, `/opt/splunk/lib/` are root-owned even though `/opt/splunk/bin/splunk` itself is splunk-owned. Before first start, run `sudo chown -R splunk:splunk /opt/splunk`. Otherwise the `splunk` user can't write log files at init time.
+- **CLI noun rename:** `splunk show licenser-localslave` (Splunk 9.x and earlier) is no longer valid in 10.4. Use `splunk list licenser-groups` for active-group state and `splunk list licenses` for installed licenses.
+- **Splunk Web takes ~10–15 sec to bind 0.0.0.0:8000 after splunkd starts.** A quick `ss -tlnp` immediately post-restart may miss it. Sleep before checking, or grep for the actual splunkd process child handle.
+
+### Recovery / break-glass
+- Bootstrap admin password (24-char, throwaway): see `SOC-Automation-Project.md` § Azure VMs (P2). Use `mydfir` for everything; `admin` is only for break-glass if `mydfir` is ever locked out.
+
 ## Things to track during build
 
 - `vm-soc-v2-win` is currently Stopped (deallocated). Auto-shutdown is doing its job. Will need to start it before Task 12 (Sysmon UF re-point) and Task 19 end-to-end verify.
