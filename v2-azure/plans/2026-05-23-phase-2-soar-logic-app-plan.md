@@ -15,7 +15,7 @@
 | Path | Status | Responsibility |
 |---|---|---|
 | `v2-azure/logic-app/workflow.json` | CREATE (Task 16) | Exported Logic App workflow definition — source of truth, mirrors v1's `JSON/SOC-Triage-v3.json` |
-| `v2-azure/logic-app/test-fixtures/sample-incident.json` | CREATE (Task 1) | Canned Sentinel incident payload for "Run with payload" smoke tests during build |
+| `v2-azure/logic-app/test-fixtures/sample-incident.json` | CREATE (Task 16) | Real Sentinel incident payload captured from a successful acceptance run — used for future regression replay. Smoke tests during Tasks 3-13 use either the Logic Apps designer's auto-generated payload template OR a minimal inline IOC-rich payload provided per-step. |
 | `v2-azure/logic-app/runbook.md` | CREATE (Task 17) | Operational runbook — provisioning steps, verification queries, troubleshooting playbook, secrets management |
 | `v2-azure/logic-app/README.md` | CREATE (Task 20) | Phase 2 deliverable doc — commentary, v1↔v2 parity table, lessons learned (analog of Phase 1's detection doc) |
 | `v2-azure/architecture/current-state.md` | MODIFY (Task 18) | Extend Mermaid diagram with KV, AR, LA nodes flipped to `:::done`; update component notes |
@@ -39,45 +39,20 @@ The plan's "Smoke test" steps use one of these. Each task verifies that the *cum
 
 ---
 
-## Task 1: Setup verification + sample incident fixture
+## Task 1: Setup verification (fixture capture deferred to Task 16)
 
-**Files:**
-- Create: `v2-azure/logic-app/test-fixtures/sample-incident.json`
+**Files:** none
+
+**Why fixture is deferred:** The original plan had us capture a real Sentinel incident JSON upfront. In practice, this is friction without payoff — neither portal export (CSV-only) nor `az` CLI was an acceptable path. The cleaner shape: smoke tests during Tasks 3-13 use the Logic Apps designer's auto-generated payload template OR minimal inline IOC-rich payloads provided per-step. The actual fixture file gets captured from a real successful run after Task 15 (acceptance run) and committed as part of Task 16.
 
 - [ ] **Step 1: Confirm branch state**
 
 Run: `git -C SOC_Automation_Project status && git -C SOC_Automation_Project branch --show-current`
-Expected: `On branch v2-azure ... working tree clean` (or only the new plan file untracked) AND current branch is `v2-azure`.
+Expected: `On branch v2-azure ... working tree clean` AND current branch is `v2-azure`.
 
-- [ ] **Step 2: Confirm Phase 1 incident exists for testing**
+- [ ] **Step 2: Confirm Phase 1 incident exists**
 
-Open Sentinel (portal.azure.com → search "Microsoft Sentinel" → select `law-soc-v2-azure` workspace → Incidents). Verify Incident #10 (T1059.001 PowerShell Encoded Command) is visible. This is the existing fixture we'll use for smoke tests in Tasks 3 and 14.
-
-- [ ] **Step 3: Capture a real Sentinel incident JSON for the fixture**
-
-In Sentinel → Incidents → Incident #10 → Right-side panel → click the `JSON view` / `View JSON` link (location varies; may be under "Full details" or `...` menu). Copy the full JSON to clipboard.
-
-(Alternative if portal JSON view is unavailable: `az rest --method GET --uri "https://management.azure.com/subscriptions/{sub}/resourceGroups/rg-soc-v2-azure-central-us/providers/Microsoft.OperationalInsights/workspaces/law-soc-v2-azure/providers/Microsoft.SecurityInsights/incidents/{incident-guid}?api-version=2023-02-01"`.)
-
-- [ ] **Step 4: Save fixture file**
-
-Create `v2-azure/logic-app/test-fixtures/sample-incident.json` with the captured JSON. Redact any sensitive subscription IDs if pasting publicly (this file will be committed). Verify it parses:
-
-Run: `python -c "import json; json.load(open('v2-azure/logic-app/test-fixtures/sample-incident.json'))"`
-Expected: no output (parses successfully).
-
-- [ ] **Step 5: Commit the fixture**
-
-```bash
-git -C SOC_Automation_Project add v2-azure/logic-app/test-fixtures/sample-incident.json
-git -C SOC_Automation_Project commit -m "chore(v2-azure): add sample Sentinel incident fixture for Phase 2 smoke tests
-
-Captured from real Phase 1 Incident #10 (T1059.001 PowerShell Encoded
-Command). Used for Logic Apps 'Run with payload' smoke tests during
-Phase 2 build.
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
-```
+Open Sentinel (portal.azure.com → search "Microsoft Sentinel" → select `law-soc-v2-azure` workspace → Incidents). Verify Incident #10 (T1059.001 PowerShell Encoded Command) is visible. This confirms Phase 1's foundation is intact.
 
 ---
 
@@ -124,12 +99,11 @@ KV blade → Objects → Secrets → + Generate/Import (for each of the three):
 
 For each: Upload options = Manual, Name = (as above), Value = (paste), Content type = blank, Activation/expiration = blank, Enabled = Yes, Create.
 
-- [ ] **Step 5: Verify secrets are readable**
+- [ ] **Step 5: Verify secrets are present**
 
-Run: `az keyvault secret show --vault-name kv-soc-v2-secrets-<suffix> --name anthropic-api-key --query value -o tsv`
-Expected: prints the Anthropic API key value. Repeat for the other two names; all three should print their respective values.
+Portal: Vault → Objects → Secrets. Confirm all 3 secrets are listed by name (`anthropic-api-key`, `virustotal-api-key`, `abuseipdb-api-key`), each in **Enabled** state. Click each name → the latest version row should appear without a permission error (the Key Vault Administrator role from Step 3 should let you see them).
 
-(Per repo rules, do not echo or paste these values in conversation. Just confirm the commands succeed.)
+You do not need to reveal the values — just confirm the entries exist and you can navigate to them. Runtime readability by the Logic App's managed identity gets verified in Task 3 Step 6's smoke test (when the Get secret action actually fires).
 
 ---
 
@@ -851,23 +825,33 @@ Save to `v2-azure/logic-app/screenshots/` (create directory). These go in the de
 
 ---
 
-## Task 16: Export Logic App workflow JSON
+## Task 16: Capture real fixture + export Logic App workflow JSON
 
-**Files:** Create `v2-azure/logic-app/workflow.json`
+**Files:**
+- Create: `v2-azure/logic-app/test-fixtures/sample-incident.json` (from real run)
+- Create: `v2-azure/logic-app/workflow.json` (exported workflow definition)
 
-- [ ] **Step 1: Export via Azure CLI**
+- [ ] **Step 0: Capture real fixture from the acceptance run**
 
-Run:
+Open `la-soc-v2-triage-claude` → Run history → click the successful acceptance-run from Task 15 → click the trigger ("When Microsoft Sentinel incident is created") → click the trigger's Outputs panel → copy the full JSON body.
 
+Save to `SOC_Automation_Project/v2-azure/logic-app/test-fixtures/sample-incident.json`. This is now a real captured trigger payload (the v2 equivalent of v1's pinned webhook test data).
+
+Verify it parses:
 ```bash
-az logic workflow show \
-  --resource-group rg-soc-v2-azure-central-us \
-  --name la-soc-v2-triage-claude \
-  --query 'definition' \
-  > SOC_Automation_Project/v2-azure/logic-app/workflow.json
+python -c "import json; json.load(open('SOC_Automation_Project/v2-azure/logic-app/test-fixtures/sample-incident.json'))"
 ```
+Expected: no output (parses successfully).
 
-Expected: file written, ~5-50 KB.
+- [ ] **Step 1: Export workflow definition via portal Code view**
+
+Portal: `la-soc-v2-triage-claude` → left nav: "Logic app code view" (under Development Tools). Top toolbar → click the inline copy button OR Ctrl+A → Ctrl+C the entire JSON.
+
+Save the copied JSON to `SOC_Automation_Project/v2-azure/logic-app/workflow.json` (paste into a new file via your editor of choice).
+
+Expected: file size ~5-50 KB, well-formed JSON starting with `{` and ending with `}`.
+
+(Alternative if Code view is unavailable: `az logic workflow show --resource-group rg-soc-v2-azure-central-us --name la-soc-v2-triage-claude --query 'definition' > SOC_Automation_Project/v2-azure/logic-app/workflow.json` — listed as fallback only since you've opted out of az CLI for this build.)
 
 - [ ] **Step 2: Verify it's valid JSON**
 
