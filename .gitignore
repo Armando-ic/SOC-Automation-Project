@@ -1,6 +1,10 @@
 # Secrets file — contains API keys, VM passwords, DFIR-Iris admin password
 SOC-Automation-Project.md
 
+# Per-branch / per-component local secrets files (e.g. v2-azure/secrets.local.md)
+# Documented in the file headers themselves as gitignored — this pattern enforces that contract.
+*.local.md
+
 # Obsidian local config (per-machine, no need to share)
 vault/.obsidian/
 vault/.trash/
