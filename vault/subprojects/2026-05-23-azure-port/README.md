@@ -1,5 +1,5 @@
 ---
-status: draft
+status: active
 updated: 2026-05-23
 sub_project: P2 (Azure Port)
 related: [[spec]], [[../../../SOC-Automation-Project-to-Azure-Port]]
@@ -62,7 +62,8 @@ Port the local-VMware SOC stack (Splunk + n8n + DFIR-IRIS) to Azure IaaS, then d
 
 - Brainstorming complete (2026-05-23). 8 clarifying questions resolved.
 - Spec drafted at [[spec]].
-- Implementation plan: pending (next step — invoke `writing-plans` skill).
+- Implementation plan: [[plan]] (created 2026-05-23).
+- Provisioning: in progress.
 - Decommission: not started.
 
 ## References

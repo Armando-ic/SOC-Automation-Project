@@ -1,5 +1,5 @@
 ---
-status: draft
+status: active
 updated: 2026-05-23
 sub_project: P2 (Azure Port)
 approach: Fresh-provision all 3 VMs in Azure (no VHD import); reuse Phase 1 VNet/RG; aggressive same-day archive + delete decommission
