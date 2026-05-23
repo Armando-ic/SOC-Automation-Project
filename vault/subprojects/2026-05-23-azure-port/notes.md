@@ -82,6 +82,26 @@ Append entries as work progresses. Newest at the top.
 ### Recovery / break-glass
 - Bootstrap admin password (24-char, throwaway): see `SOC-Automation-Project.md` § Azure VMs (P2). Use `mydfir` for everything; `admin` is only for break-glass if `mydfir` is ever locked out.
 
+## Task 9 / 10 / 11 — Splunk add-ons, index, saved searches (2026-05-23)
+
+### Task 9 — add-ons installed via Splunk Web "Find More Apps"
+- `Splunk_TA_microsoft_sysmon` **5.0.0** (matches plan's pinned version exactly)
+- `Splunk_TA_windows` **10.0.1** (matches plan's pinned version exactly)
+- Both required Splunk.com credential entry in the UI install flow + a Splunk restart per add-on.
+
+### Task 10 — index `mydfir-project` created
+- `splunk add index mydfir-project` (defaults: datatype=event, paths under `/opt/splunk/var/lib/splunk/mydfir-project/`).
+- No bucket/retention tuning — Dev License's 10 GB/day cap is the natural ceiling for this lab.
+
+### Task 11 — saved searches via REST API (Splunk mgmt API on https://localhost:8089)
+- **`T1059.001 - PowerShell Encoded Command`** — enabled, cron `*/5 * * * *`, owner mydfir/search, SPL identical to vault canonical at [[../../detections/t1059-001-powershell-encoded]] (the regex `(?i)\s-e[ncodedommand]*\s` survived URL-encoding intact). Webhook URL is `http://placeholder-update-in-task-16.invalid:5678/webhook/db7245f7-8451-4bea-b47d-f6ad35b818cd` — `.invalid` TLD ensures fast DNS failure rather than misroute. **Update at Task 16.**
+- **`Test-Brute-Force-External-Spoofed`** — disabled, cron `* * * * *`. **SPL is a reconstruction:** the canonical original SPL was not captured in any vault doc; reconstructed approximation is `index=mydfir-project EventCode=4625 | stats count by user, src_ip, host | where count >= 5 | eval src_ip="185.220.101.42"`. Behavior at runtime is unverified (search is disabled). If A1/A2 verification is ever re-run from this Azure Splunk, the SPL may need re-derivation against actual 4625 event structure under `Splunk_TA_windows` 10.0.1's field extractions.
+
+### Splunk REST API gotchas discovered during Task 11
+- **`actions = webhook` is the master switch, not `action.webhook = 1`.** A POST with only `action.webhook=1 action.webhook.param.url=...` creates the search but webhook stays inactive. Splunk's REST returns `action.webhook = 0` and the search never fires the action. Fix: POST `actions=webhook` (singular field, value is the action name; multi-action would be comma-separated). Once `actions` includes "webhook", `action.webhook=1` is auto-derived.
+- **curl's `-d` does NOT URL-encode; semicolons in field values silently split fields.** A description with text like `"context A; context B"` causes Splunk to reject the second half as an "unsupported argument" (HTTP 400). Fix: use `--data-urlencode 'description=...'` for any free-text field. Already-known pattern for the `search` field; same rule applies to `description`, `alert_subject`, etc. The leading-`search`-keyword REST-API trap captured at [[../../detections/t1059-001-powershell-encoded#saved-search-rest-api-trap]] is a separate but related class — same lesson: be deliberate about what crosses the REST boundary verbatim.
+- **The Splunk 10.2.2 `realtime_schedule=False` gotcha still applies in 10.4.** Explicitly setting `realtime_schedule=0` keeps `is_scheduled=1` stable across edits. Without it, the UI's "Real-Time Schedule" radio flips `is_scheduled=0` silently after the next edit.
+
 ## Things to track during build
 
 - `vm-soc-v2-win` is currently Stopped (deallocated). Auto-shutdown is doing its job. Will need to start it before Task 12 (Sysmon UF re-point) and Task 19 end-to-end verify.
