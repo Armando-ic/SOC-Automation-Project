@@ -60,6 +60,56 @@ Append entries as work progresses. Newest at the top.
 
 Task 17 (IRIS VM provision) pulled forward ahead of Task 15 completion because the `n8n-nodes-dfir-iris` community node's credential validation made it cleaner to wire IRIS credentials against a real Azure IRIS host rather than the Option-B placeholder against v1's unreachable `192.168.129.133`. Plan Task 19's `pg_dump`/restore step is being **skipped** — v1 IRIS is itself a 2026-05-12 fresh rebuild with minimal historical alerts (max alert #64 per 2026-05-19 demo log), so the migration cost outweighs the benefit. Azure IRIS becomes a fresh install. Tasks 17 → 18 → resume 15 → 16 → simplified 19 (just e2e verify, no migration).
 
+## Task 14 — n8n install complete (2026-05-25)
+
+- **n8n version installed: 2.21.7** (image digest `sha256:9f1f8e4c093c9924338bd168e3f813f746041d13b337753af0dbdd329e7b50f7`, Docker Hardened Image released 2025-05-06, alpine-3.22 + node 24-dev). Pinned in compose file at the user's request: today's `:latest` becomes the canonical baseline for future rebuilds.
+- **Compose file:** `/home/azureuser/docker-compose.yml` on `vm-soc-v2-n8n`. Uses bind-mount `~/.n8n:/home/node/.n8n` for state persistence; container runs as UID 1000 (= azureuser host UID), so no permission gotchas.
+- **Auth pattern:** **No basic-auth env vars** — used n8n native user management (owner account at `owner@example.com` / `[REDACTED-LAB-PW]`, matching v1 convention). Deviates from plan Task 14 Step 3's `N8N_BASIC_AUTH_*` prescription, which was incorrect — `N8N_BASIC_AUTH_*` is deprecated since n8n 1.0+ and v1 actually used native user management too.
+- **Required env vars set:** `N8N_SECURE_COOKIE=false` (honors 2026-05-12 gotcha for LAN HTTP access), `N8N_HOST=52.173.105.92`, `N8N_PROTOCOL=http`, `WEBHOOK_URL=http://52.173.105.92:5678/`, `GENERIC_TIMEZONE=America/New_York`.
+
+### Gotchas discovered during n8n install (worth carrying forward)
+
+- **n8n 2.21.7 logs a Python 3 missing warning at startup.** "Failed to start Python task runner in internal mode... Python 3 is missing from this system." Non-blocking — the JS Task Runner registers fine and our v3 workflow uses only JavaScript code nodes. Install python3 + restart container only if a future workflow needs Python code nodes.
+- **n8n's setup wizard SHOWS as `userManagement.showSetupOnFirstLoad: true` in `/rest/settings` on a fresh install.** Confirmed via REST API query before browser handoff. Once owner account is created, this flips false and the wizard never reappears.
+- **The `version: '3.8'` line in docker-compose.yml is obsolete with Compose v5.1.4** — generates a warning but is ignored. Safe to omit entirely in future compose files.
+- **n8n's frontend serves at SPA-routed paths (`/setup`, `/workflow`, etc.), not at root `/`.** A `curl http://localhost:5678/` returns 404 — that's expected; browsers follow the SPA's JS routing. Use `/healthz` for liveness probes.
+
+## Task 15 — DFIR IRIS community node integration (2026-05-25)
+
+Used the community package `n8n-nodes-dfir-iris` v2.0.3 by `barn4k` (https://github.com/barn4k/n8n-nodes-dfir-iris). The package is well-designed for v2.4.x IRIS — supports the full alert/case/IOC API surface against IRIS API v2.0.4.
+
+- **Note:** v3 workflow's "Create Iris Alert" was an `n8n-nodes-base.httpRequest` with `nodeCredentialType: dfirIrisApi` — referencing a custom credential type that was hand-registered in v1's n8n install (never an npm package). On the Azure n8n, that custom credential type is absent, so the v3 JSON imports with a broken Iris node ("Install this node to use it").
+- **Chosen resolution:** install the community node + replace the broken HTTP request node with the package's purpose-built DFIR IRIS node (Resource=Alert, Operation=Create). Deviates from v3 JSON canonically, but more reproducible (anyone cloning the repo can install one npm package; no need to hunt for custom credential files).
+- **Alternative considered + rejected:** switch the node to generic HTTP Header Auth with `Authorization: Bearer <key>`. Functionally identical but loses the structured DFIR-IRIS operation UI.
+
+## Task 18 — IRIS install complete (2026-05-25)
+
+- **IRIS version installed:** dfir-iris/iris-web @ tag `v2.4.22` (commit `f75e56fb` — matches 2026-05-12 v1 rebuild commit exactly).
+- **Compose pulled all 4 images successfully:** `iriswebapp_db:v2.4.22`, `iriswebapp_app:v2.4.22`, `iriswebapp_nginx:v2.4.22`, `rabbitmq:3-management-alpine`.
+- **5 containers running healthy:** db, rabbitmq, app, nginx (with health check), worker. Worker connects to rabbitmq + celery ready in ~15 sec post-start.
+- **Total startup time: ~30 sec** from `docker compose up -d` to "IRIS IS READY on port 443" log line.
+- **HTTPS on 443 bound** via docker-proxy on host. Web UI at `https://20.29.76.25` (self-signed cert). API at `https://10.0.0.7/api/*` for n8n.
+- **Admin login:** `administrator` / `[REDACTED-LAB-PW]` (via `IRIS_ADM_PASSWORD` in .env).
+- **API key:** captured in secrets file (set via `IRIS_ADM_API_KEY` in .env — no log-scraping needed).
+- **`/api/ping` returns `{"status":"success","message":"pong"}` with Bearer token auth — confirmed end-to-end.**
+
+### Gotchas discovered + updates to v1-era guidance (worth carrying forward)
+
+- **`depends_on:` commenting workaround from 2026-04-29 / 2026-05-12 is NO LONGER NEEDED with modern `docker compose v5.1.4` (plugin).** v1 used legacy `docker-compose 1.29.2` which had ordering / KeyError issues; the modern plugin handles short-form `depends_on` cleanly. Skipped the awk pass and confirmed all 5 containers came up in correct order on first try. Update the runbook to note: workaround only required if falling back to legacy docker-compose.
+- **`IRIS_ADM_API_KEY` can be set explicitly in `.env`** — no need to bring IRIS up, scrape logs, and regenerate via UI. The .env.model documents this as optional (commented out by default); uncommenting and setting it gives a known API key from first start. Much cleaner for automation / reproducible rebuilds than the v1 pattern of log-scraping.
+- **`.env.model → .env` step is still required** (v1 gotcha persists in v2.4.22) — the repo doesn't ship a `.env`, only `.env.model`. Postgres won't start without the file existing.
+- **Benign db log warning during first start:** `"duplicate key value violates unique constraint groups_group_name_key" Key (group_name)=(Analysts) already exists`. IRIS's init script tries to insert default groups and catches the conflict downstream. Harmless. Don't chase it.
+- **All 4 IRIS images pulled in parallel in <2 minutes** on Azure D2s_v3 — significantly faster than v1's local VMware experience (15-20 min on USB HDD storage per 2026-05-08 notes). Premium SSD + Azure container registry caching pays off.
+
+### IRIS credential update for n8n (next user step)
+
+The DFIR-IRIS credential created earlier with v1 placeholder host needs updating:
+- **Host:** `192.168.129.133` → `10.0.0.7` (vm-soc-v2-iris private IP — n8n reaches IRIS over VNet)
+- **Token:** v1's `<redacted-key-prefix>...` → new `***REMOVED-IRIS-ADMIN-API-KEY (rotate on next IRIS start)***` (set via IRIS_ADM_API_KEY)
+- **Use HTTP:** OFF (still HTTPS)
+- **Ignore SSL Issues:** ON (still self-signed)
+- **API Version:** 2.0.4 (unchanged)
+
 **OS disk:** `vm-soc-v2-splunk_OsDisk_1_68042d8f0c8841f0ba830dbbb9711cdc` (Premium SSD, 64 GiB, delete-with-VM enabled).
 
 **Image baseline:** Canonical `ubuntu-24_04-lts/server`, Gen2, Trusted launch (Secure boot + vTPM, Integrity monitoring off).
