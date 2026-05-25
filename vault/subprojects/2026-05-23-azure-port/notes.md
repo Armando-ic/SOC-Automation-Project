@@ -110,6 +110,19 @@ The DFIR-IRIS credential created earlier with v1 placeholder host needs updating
 - **Ignore SSL Issues:** ON (still self-signed)
 - **API Version:** 2.0.4 (unchanged)
 
+## Task 15 complete — workflow live (2026-05-25)
+
+- Workflow **SOC Triage v3** activated on `vm-soc-v2-n8n`.
+- **Production webhook URL:** `http://52.173.105.92:5678/webhook/db7245f7-8451-4bea-b47d-f6ad35b818cd` (public IP form)
+- **Production webhook URL (private IP form — preferred for Splunk→n8n VNet traffic):** `http://10.0.0.6:5678/webhook/db7245f7-8451-4bea-b47d-f6ad35b818cd`
+- **GUID `db7245f7-8451-4bea-b47d-f6ad35b818cd` survived JSON import unchanged** — matches the v3-era GUID preserved during 2026-05-12 v1 rebuild specifically so Splunk needed no change.
+- 4 credentials wired:
+  - **Anthropic account** → Anthropic API node
+  - **VirusTotal account** → lookup_file_hash_virustotal HTTP Request Tool
+  - **Header Auth account** → enrich_ip_abuseipdb HTTP Request Tool (Name=`Key`)
+  - **DFIR IRIS account** → Add new Alert node (community node `n8n-nodes-dfir-iris.dfirIris` v2)
+- Updated workflow JSON exported back to `JSON/SOC-Triage-v3.json` and committed.
+
 **OS disk:** `vm-soc-v2-splunk_OsDisk_1_68042d8f0c8841f0ba830dbbb9711cdc` (Premium SSD, 64 GiB, delete-with-VM enabled).
 
 **Image baseline:** Canonical `ubuntu-24_04-lts/server`, Gen2, Trusted launch (Secure boot + vTPM, Integrity monitoring off).
