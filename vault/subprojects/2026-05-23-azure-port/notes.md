@@ -49,8 +49,11 @@ Append entries as work progresses. Newest at the top.
 | VM | Public IP | Private IP | Size | NIC name | Provisioned (Eastern) |
 |---|---|---|---|---|---|
 | vm-soc-v2-splunk | `20.236.193.253` | `10.0.0.5` | Standard_D4s_v3 | `vm-soc-v2-splunk843` | 2026-05-23 4:29 PM |
+| vm-soc-v2-n8n | `52.173.155.92` | `10.0.0.6` | Standard_D2s_v3 | `vm-soc-v2-n8n859` | 2026-05-25 |
 
-**SSH key:** `C:\Users\Owner\.ssh\vm-soc-v2-linux-key.pem` (RSA, generated during Task 6, will be reused for n8n + IRIS VMs).
+**SSH key:** `C:\Users\Owner\.ssh\vm-soc-v2-linux-key.pem` (RSA, generated during Task 6, reused for n8n; will be reused again for IRIS VM).
+
+**DSv3 quota status confirmed at Task 13:** D2s_v3 size-picker accepted without quota warning. Carry-forward concern from handoff brief resolved — no quota increase needed for n8n; expect same for IRIS (D2s_v3) at Task 17.
 
 **OS disk:** `vm-soc-v2-splunk_OsDisk_1_68042d8f0c8841f0ba830dbbb9711cdc` (Premium SSD, 64 GiB, delete-with-VM enabled).
 
@@ -142,4 +145,4 @@ Phase 1's spec said Sentinel + AMA + DCR + KQL on vm-soc-v2-win — but **never 
 - `vm-soc-v2-win` is currently Stopped (deallocated). Auto-shutdown is doing its job. Will need to start it before Task 12 (Sysmon UF re-point) and Task 19 end-to-end verify.
 - All new VMs will get per-NIC NSGs named `vm-soc-v2-<role>-nsg` (mirrors Phase 1 pattern).
 - VNet `vm-soc-v2-win-vnet` overall address-space value: gather opportunistically if it surfaces in any wizard tab during Task 6; not blocking.
-- DSv3 family quota: confirm visibility at Task 6 wizard size-picker; if "Insufficient quota" warning shows, file increase to 12 (current expected limit 10, need 8 — but file 12 with same headroom rationale we used today).
+- DSv3 family quota: ~~confirm visibility at Task 6 wizard size-picker~~ resolved at Task 13 (D2s_v3 accepted without warning; usage now 6 vCPUs).
