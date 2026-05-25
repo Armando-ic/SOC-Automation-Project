@@ -128,7 +128,71 @@ The DFIR-IRIS credential created earlier with v1 placeholder host needs updating
 - **Saved search `T1059.001 - PowerShell Encoded Command` updated** via REST POST to `https://localhost:8089/servicesNS/mydfir/search/saved/searches/...`.
 - `action.webhook.param.url`: `http://placeholder-update-in-task-16.invalid:5678/...` → **`http://10.0.0.6:5678/webhook/db7245f7-8451-4bea-b47d-f6ad35b818cd`** (n8n private IP form, intra-VNet routing).
 - All other saved-search properties unchanged: `actions=webhook`, `cron_schedule=*/5 * * * *`, `is_scheduled=True`, `disabled=False`, `realtime_schedule=False` (gotcha pattern preserved).
-- **Sanity ping from Splunk shell** to the new URL returned `{"message":"Workflow was started"}` in 260ms — confirms VNet routing (Splunk 10.0.0.5 → n8n 10.0.0.6:5678) works, NSG rule `allow-webhook-from-splunk` is correctly scoped, and n8n's webhook trigger fires. Caveat: sanity payload was `{"test":"task-16-sanity-from-splunk-shell"}` — not Splunk's real alert schema, so the downstream Claude+IRIS path likely errored on that one execution. Inspect via n8n Executions to confirm/clear if needed before Task 19. Not blocking.
+- **Sanity ping from Splunk shell** to the new URL returned `{"message":"Workflow was started"}` in 260ms — confirms VNet routing (Splunk 10.0.0.5 → n8n 10.0.0.6:5678) works, NSG rule `allow-webhook-from-splunk` is correctly scoped, and n8n's webhook trigger fires. Caveat: sanity payload was `{"test":"task-16-sanity-from-splunk-shell"}` — not Splunk's real alert schema, so the downstream Claude+IRIS path errored on that one execution. (Logged as exec id=1 in n8n DB.)
+
+## Task 19 — End-to-end pipeline verified in Azure (2026-05-25)
+
+**ATH fire → Splunk → n8n → Claude → IRIS alert lands.** First successful IRIS alert: `alert_id=1` at 2026-05-25T22:40:02 UTC. Second confirmed via scheduled cron tick: `alert_id=2` at 22:40:16 UTC. Both alerts contain marker `Task19-e2e-8308dc1b` decoded from the synthetic event's base64 payload.
+
+### Pipeline latency observed (single fire trace)
+
+| Hop | Time (UTC) | Latency from prior | Notes |
+|---|---|---|---|
+| Synthetic fire (`powershell.exe -NoProfile -EncodedCommand`) on `vm-soc-v2-win` via Run Command | 22:27:30.000 | — | ATH module not installed; synthetic equivalent matches Sysmon event shape + SPL regex |
+| Splunk index | 22:27:30.159 | **159 ms** | Sub-second indexing latency from UF → Splunk |
+| Saved search trigger (scheduled `*/5` cron) | 22:40:00 | up to 5 min cron wait | First post-fix tick (was 22:30:00 in pre-fix run, but errored on IRIS hop) |
+| n8n webhook → workflow execution start | 22:40:00 | < 1s | Splunk → n8n private IP (10.0.0.6:5678) |
+| Workflow execution complete | 22:40:16 | **16 sec** | Claude triage + (empty) enrichment + IRIS Add new Alert |
+| IRIS alert created | 22:40:16 | inline | `alert_id=2`, title="T1059.001 - PowerShell Encoded Command", severity_id=4 (Low) |
+| **Total ATH → IRIS (this fire)** | | **12 min 46 sec** | Cron wait dominates total; active processing is < 17 sec |
+
+For comparison-latency.md (Task 24): the meaningful "active processing" latency (saved search dispatch → IRIS alert) is **~16 sec on Azure D2s_v3** for a single-IOC-free synthetic event. Cron-tick wait is a separate, deterministic factor.
+
+### Claude triage quality
+
+Both alerts contain Claude-generated descriptions that correctly:
+- Identified the encoded PowerShell as T1059.001 + T1027
+- Decoded the base64 payload to `Write-Host "Task19-e2e-8308dc1b"`
+- Recognized the `Task##-e2e` naming pattern as a SOC test/training artifact
+- Assigned `severity=low` (IRIS severity_id=4 per the 2026-04-28 captured mapping)
+- Noted the SYSTEM execution context as a procedural flag
+- Set `iocs=[]` correctly (synthetic test has no real IOCs to enrich)
+
+### Bugs found + fixed during Task 19 verification
+
+#### 1. `JSON.stringify()` wrapper for `alert_iocs` was wrong (my error, fixed in n8n UI 2026-05-25 22:36:55 UTC)
+
+**Symptom:** First 2 post-fix executions (exec 2 + 3) errored at the "Add new Alert" node with `NodeApiError: Bad request - please check your parameters` (HTTP 400) and underlying message `'str' object has no attribute 'get'`.
+
+**Root cause:** I prescribed `{{ JSON.stringify($json.alert_iocs) }}` for the community node's `Add IOCs (JSON)` field. The community node's `create.operation.ts` does NOT call `JSON.parse()` on the field value — it casts via TypeScript (compile-time-only). So n8n sent a JSON-encoded STRING where IRIS expected a list of dicts. IRIS's Python backend then iterated the string character-by-character, calling `.get()` on each character → `'str' object has no attribute 'get'`.
+
+**Fix:** Change expression to `{{ $json.alert_iocs }}` — pass the raw array directly. n8n's json-type fields accept JS arrays/objects natively when the expression evaluates to them.
+
+**Carry-forward:** If the workflow JSON in git ever gets re-imported into a fresh n8n, the live n8n must have the corrected expression. The user re-saved the workflow in n8n UI; pending re-export to git.
+
+#### 2. Manual `dispatch` of a saved search does NOT trigger alert actions by default (Splunk gotcha)
+
+**Symptom:** Manually-dispatched saved search at 22:37:40 UTC returned `dispatchState: DONE, resultCount=1, eventCount=1` — search ran successfully and found our event — but NO webhook fired, no n8n execution was created.
+
+**Root cause:** Splunk's `POST /servicesNS/<user>/<app>/saved/searches/<name>/dispatch` does not trigger alert actions unless explicitly told to. Scheduled runs trigger actions automatically; manual dispatches do not.
+
+**Fix:** Add `trigger_actions=1` to the dispatch POST body:
+```
+curl -X POST --data-urlencode 'output_mode=json' --data-urlencode 'trigger_actions=1' \
+  https://localhost:8089/servicesNS/mydfir/search/saved/searches/<name>/dispatch
+```
+
+**Carry-forward:** Whenever a fresh instance needs to manually re-fire a saved-search webhook (debugging, testing, demo), use `trigger_actions=1`. Capture in runbook.
+
+### IRIS API endpoints used during verification
+
+- `GET /api/ping` — credential health check (Bearer auth)
+- `GET /alerts/filter?order_by=alert_creation_time&sort_dir=desc&per_page=10&page=1` — list recent alerts (response: `{"status":"success","data":{"alerts":[...]}}`)
+- Both endpoints work over both `https://localhost/` (from IRIS VM itself) and `https://10.0.0.7/` (from n8n VM via VNet) with self-signed cert + `-k`.
+
+### IOC test gap (future work)
+
+Both alerts had `ioc_count=0` because the synthetic test event uses `Write-Host "<marker>"` — no IPs, hashes, or URLs in the payload. **For full pipeline IOC validation, fire a T1059.003-shaped event from the 2026-05-19 demo session.** That synthetic embeds `IOC_IP=185.220.101.42 && IOC_HASH=<EICAR-sha256> && IOC_URL=...` — Sysmon shape identical, IRIS gets a non-empty `alert_iocs` array, AbuseIPDB + VirusTotal enrichment exercise their full path. Deferred for now (the e2e schema/transport is verified; full IOC enrichment is a v3 demo-only artifact).
 
 **OS disk:** `vm-soc-v2-splunk_OsDisk_1_68042d8f0c8841f0ba830dbbb9711cdc` (Premium SSD, 64 GiB, delete-with-VM enabled).
 
