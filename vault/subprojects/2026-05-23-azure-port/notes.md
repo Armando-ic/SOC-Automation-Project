@@ -50,10 +50,15 @@ Append entries as work progresses. Newest at the top.
 |---|---|---|---|---|---|
 | vm-soc-v2-splunk | `20.236.193.253` | `10.0.0.5` | Standard_D4s_v3 | `vm-soc-v2-splunk843` | 2026-05-23 4:29 PM |
 | vm-soc-v2-n8n | `52.173.105.92` | `10.0.0.6` | Standard_D2s_v3 | `vm-soc-v2-n8n859` | 2026-05-25 |
+| vm-soc-v2-iris | `20.29.76.25` | `10.0.0.7` | Standard_D2s_v3 | `vm-soc-v2-iris706` | 2026-05-25 |
 
-**SSH key:** `C:\Users\Owner\.ssh\vm-soc-v2-linux-key.pem` (RSA, generated during Task 6, reused for n8n; will be reused again for IRIS VM).
+**SSH key:** `C:\Users\Owner\.ssh\vm-soc-v2-linux-key.pem` (RSA, generated during Task 6, reused across all three P2 Linux VMs — splunk, n8n, iris).
 
-**DSv3 quota status confirmed at Task 13:** D2s_v3 size-picker accepted without quota warning. Carry-forward concern from handoff brief resolved — no quota increase needed for n8n; expect same for IRIS (D2s_v3) at Task 17.
+**DSv3 quota status:** confirmed adequate. Final usage across all 3 P2 VMs: 8 vCPUs (Splunk D4s_v3 + n8n D2s_v3 + iris D2s_v3) within Trial DSv3 family limit. No quota increases needed for P2.
+
+## Plan re-order 2026-05-25
+
+Task 17 (IRIS VM provision) pulled forward ahead of Task 15 completion because the `n8n-nodes-dfir-iris` community node's credential validation made it cleaner to wire IRIS credentials against a real Azure IRIS host rather than the Option-B placeholder against v1's unreachable `192.168.129.133`. Plan Task 19's `pg_dump`/restore step is being **skipped** — v1 IRIS is itself a 2026-05-12 fresh rebuild with minimal historical alerts (max alert #64 per 2026-05-19 demo log), so the migration cost outweighs the benefit. Azure IRIS becomes a fresh install. Tasks 17 → 18 → resume 15 → 16 → simplified 19 (just e2e verify, no migration).
 
 **OS disk:** `vm-soc-v2-splunk_OsDisk_1_68042d8f0c8841f0ba830dbbb9711cdc` (Premium SSD, 64 GiB, delete-with-VM enabled).
 
