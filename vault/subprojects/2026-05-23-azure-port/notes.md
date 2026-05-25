@@ -49,7 +49,7 @@ Append entries as work progresses. Newest at the top.
 | VM | Public IP | Private IP | Size | NIC name | Provisioned (Eastern) |
 |---|---|---|---|---|---|
 | vm-soc-v2-splunk | `20.236.193.253` | `10.0.0.5` | Standard_D4s_v3 | `vm-soc-v2-splunk843` | 2026-05-23 4:29 PM |
-| vm-soc-v2-n8n | `52.173.155.92` | `10.0.0.6` | Standard_D2s_v3 | `vm-soc-v2-n8n859` | 2026-05-25 |
+| vm-soc-v2-n8n | `52.173.105.92` | `10.0.0.6` | Standard_D2s_v3 | `vm-soc-v2-n8n859` | 2026-05-25 |
 
 **SSH key:** `C:\Users\Owner\.ssh\vm-soc-v2-linux-key.pem` (RSA, generated during Task 6, reused for n8n; will be reused again for IRIS VM).
 
