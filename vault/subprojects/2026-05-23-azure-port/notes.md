@@ -123,6 +123,13 @@ The DFIR-IRIS credential created earlier with v1 placeholder host needs updating
   - **DFIR IRIS account** → Add new Alert node (community node `n8n-nodes-dfir-iris.dfirIris` v2)
 - Updated workflow JSON exported back to `JSON/SOC-Triage-v3.json` and committed.
 
+## Task 16 — Splunk saved-search webhook updated (2026-05-25)
+
+- **Saved search `T1059.001 - PowerShell Encoded Command` updated** via REST POST to `https://localhost:8089/servicesNS/mydfir/search/saved/searches/...`.
+- `action.webhook.param.url`: `http://placeholder-update-in-task-16.invalid:5678/...` → **`http://10.0.0.6:5678/webhook/db7245f7-8451-4bea-b47d-f6ad35b818cd`** (n8n private IP form, intra-VNet routing).
+- All other saved-search properties unchanged: `actions=webhook`, `cron_schedule=*/5 * * * *`, `is_scheduled=True`, `disabled=False`, `realtime_schedule=False` (gotcha pattern preserved).
+- **Sanity ping from Splunk shell** to the new URL returned `{"message":"Workflow was started"}` in 260ms — confirms VNet routing (Splunk 10.0.0.5 → n8n 10.0.0.6:5678) works, NSG rule `allow-webhook-from-splunk` is correctly scoped, and n8n's webhook trigger fires. Caveat: sanity payload was `{"test":"task-16-sanity-from-splunk-shell"}` — not Splunk's real alert schema, so the downstream Claude+IRIS path likely errored on that one execution. Inspect via n8n Executions to confirm/clear if needed before Task 19. Not blocking.
+
 **OS disk:** `vm-soc-v2-splunk_OsDisk_1_68042d8f0c8841f0ba830dbbb9711cdc` (Premium SSD, 64 GiB, delete-with-VM enabled).
 
 **Image baseline:** Canonical `ubuntu-24_04-lts/server`, Gen2, Trusted launch (Secure boot + vTPM, Integrity monitoring off).
