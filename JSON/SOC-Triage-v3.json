@@ -171,7 +171,7 @@
         "alert_severity_id": "={{ $json.severity_iris_id }}",
         "alert_title": "={{ $json.alert_name }}",
         "additionalFields": {
-          "__iocsCollectionJSON": "={{ JSON.stringify($json.alert_iocs) }}",
+          "__iocsCollectionJSON": "={{ $json.alert_iocs }}",
           "alert_description": "={{ $json.iris_description }}"
         },
         "options": {}
@@ -360,12 +360,15 @@
       ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
     "executionOrder": "v1",
-    "binaryMode": "separate"
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
   },
-  "versionId": "52c3cf17-01f9-4a54-b51d-d2d2de42d485",
+  "versionId": "69c334d0-fb25-43eb-a141-6921bf4ade7e",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "34592c6991af6b9e8e9fba311c646b869297830731a278c5169b116ea382eb48"
