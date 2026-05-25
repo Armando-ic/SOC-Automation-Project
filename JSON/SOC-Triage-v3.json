@@ -13,7 +13,7 @@
         0,
         0
       ],
-      "id": "b038ef22-0291-4076-a875-cb66fafdda3e",
+      "id": "134c44df-c5eb-4269-9093-cc2db07aa97b",
       "name": "Webhook",
       "webhookId": "db7245f7-8451-4bea-b47d-f6ad35b818cd"
     },
@@ -42,13 +42,13 @@
         288,
         0
       ],
-      "id": "2ec14191-e61e-4dee-93ae-de91fad335c3",
+      "id": "aaa4d07f-c9f1-4880-9623-89d18ff25a70",
       "name": "Message a model",
       "retryOnFail": true,
       "waitBetweenTries": 5000,
       "credentials": {
         "anthropicApi": {
-          "id": "WJgKEqTjv7rohfYB",
+          "id": "eY5rzueZr8WIY0Jt",
           "name": "Anthropic account"
         }
       }
@@ -92,11 +92,11 @@
         208,
         224
       ],
-      "id": "90a4fe84-a107-4b41-ad9f-4df3ba742e23",
+      "id": "07486a5c-6f92-4420-ba3b-22f2d40bae05",
       "name": "enrich_ip_abuseipdb",
       "credentials": {
         "httpHeaderAuth": {
-          "id": "bSoblQN7fU64kUV8",
+          "id": "s6eke0k9RLsHxzO0",
           "name": "Header Auth account"
         }
       }
@@ -124,11 +124,11 @@
         416,
         224
       ],
-      "id": "998e7810-45f0-47ee-96e0-798ab818bdb8",
+      "id": "4832b0c3-6e9d-492e-ae4e-9427a53c8507",
       "name": "lookup_file_hash_virustotal",
       "credentials": {
         "virusTotalApi": {
-          "id": "G61CzAhcC7ZyOJUW",
+          "id": "vFGuneFg9c3YYGJB",
           "name": "VirusTotal account"
         }
       }
@@ -147,7 +147,7 @@
         624,
         224
       ],
-      "id": "fba5cfb9-78cd-4155-ae17-0096a23f8d1f",
+      "id": "2ce1a261-8eaf-4f00-a533-d135385fea3a",
       "name": "submit_triage_result"
     },
     {
@@ -160,71 +160,34 @@
         688,
         0
       ],
-      "id": "21f1870a-7a39-4360-bfb6-d5b4db476ab2",
+      "id": "c4d4498a-95ef-423a-ac6b-0840e1f263a0",
       "name": "Extract Triage Result"
     },
     {
       "parameters": {
-        "curlImport": "",
-        "httpVariantWarning": "",
-        "method": "POST",
-        "url": "https://192.168.129.133/alerts/add",
-        "": "",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "dfirIrisApi",
-        "provideSslCertificates": false,
-        "sendQuery": false,
-        "sendHeaders": false,
-        "sendBody": true,
-        "contentType": "json",
-        "specifyBody": "keypair",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "alert_title",
-              "value": "={{ $json.alert_name }}"
-            },
-            {
-              "name": "alert_description",
-              "value": "={{ $json.iris_description }}"
-            },
-            {
-              "name": "alert_severity_id",
-              "value": "={{ $json.severity_iris_id }}"
-            },
-            {
-              "name": "alert_status_id",
-              "value": "1"
-            },
-            {
-              "name": "alert_customer_id",
-              "value": "1"
-            },
-            {
-              "name": "alert_iocs",
-              "value": "={{ $json.alert_iocs }}"
-            }
-          ]
+        "resource": "alert",
+        "operation": "create",
+        "alert_customer_id": 1,
+        "alert_severity_id": "={{ $json.severity_iris_id }}",
+        "alert_title": "={{ $json.alert_name }}",
+        "additionalFields": {
+          "__iocsCollectionJSON": "={{ JSON.stringify($json.alert_iocs) }}",
+          "alert_description": "={{ $json.iris_description }}"
         },
-        "options": {
-          "allowUnauthorizedCerts": true
-        },
-        "infoMessage": ""
+        "options": {}
       },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
+      "type": "n8n-nodes-dfir-iris.dfirIris",
+      "typeVersion": 2,
       "position": [
-        912,
+        896,
         0
       ],
-      "id": "b4e849b7-e482-497b-a77c-e482fdda9147",
-      "name": "Create Iris Alert",
-      "extendsCredential": "dfirIrisApi",
-      "alwaysOutputData": true,
+      "id": "9985c183-4142-4312-8a27-14ae094eefb4",
+      "name": "Add new Alert",
       "credentials": {
         "dfirIrisApi": {
-          "id": "qKoTJhuXP8yMwOON",
-          "name": "DFIR-IRIS account"
+          "id": "G1BgVvb2zge6Jn5K",
+          "name": "DFIR IRIS account"
         }
       }
     }
@@ -389,7 +352,7 @@
       "main": [
         [
           {
-            "node": "Create Iris Alert",
+            "node": "Add new Alert",
             "type": "main",
             "index": 0
           }
@@ -397,16 +360,16 @@
       ]
     }
   },
-  "active": true,
+  "active": false,
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "6ed759e9-69c1-4575-b8e8-4a2e4ebb9ab1",
+  "versionId": "52c3cf17-01f9-4a54-b51d-d2d2de42d485",
   "meta": {
     "templateCredsSetupCompleted": true,
-    "instanceId": "c1c3fc81f610423f4b712ea549e51312677a3e55fd95d018a172c6f3a05b6fd7"
+    "instanceId": "34592c6991af6b9e8e9fba311c646b869297830731a278c5169b116ea382eb48"
   },
-  "id": "EY9dpmr896n24Y85",
+  "id": "dDBJBfspIlkTrWdB",
   "tags": []
 }
