@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-05-23
+updated: 2026-05-26
 sub_project: P2 (Azure Port)
 related: [[spec]], [[README]]
 ---
@@ -8,6 +8,55 @@ related: [[spec]], [[README]]
 # P2 — Working notes
 
 Append entries as work progresses. Newest at the top.
+
+## Task 24 prep — IOC enrichment fire (2026-05-26)
+
+Pre-Task-25 IOC validation deferred from Task 19. Fired the 2026-05-19-demo cmd.exe synthetic on `vm-soc-v2-win` via Azure Run Command:
+
+```powershell
+cmd.exe /c "echo demo-<guid> && echo IOC_IP=185.220.101.42 && echo IOC_HASH=275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f && echo IOC_URL=http://malicious-test.invalid/payload && exit"
+```
+
+**Pre-step: T1059.003 saved search did not exist on Azure Splunk.** P2 Task 11 only ported 2 saved searches (T1059.001 + Test-Brute-Force). The T1059.003 search was created on local Splunk 2026-05-19 — after the P2 plan was written. Back-ported by appending the stanza directly to `/opt/splunk/etc/users/mydfir/search/local/savedsearches.conf` then `sudo systemctl restart Splunkd` (no REST auth needed for file-system edit; clean reload after restart).
+
+### Pipeline trace — T1059.003 cmd.exe IOC fire, D2s_v3 active processing
+
+| Hop | Time (UTC) | Latency from prior | Notes |
+|---|---|---|---|
+| Fire on vm-soc-v2-win | 16:23:42 | — | guid=95812d3b... |
+| Splunk indexed | ~16:23:43 | sub-second | Per prior baseline; UF → indexer is consistent |
+| Saved-search cron tick (`*/5 * * * *`) | 16:25:00 | 1 min 18 s wait | T1059.003 + T1059.001 both fired on the same tick |
+| n8n webhook → exec start (exec_id=219) | 16:25:01.388 | < 1 s | Splunk → n8n private IP, 10.0.0.5 → 10.0.0.6:5678 |
+| n8n exec end | 16:25:23.673 | **22.3 s active processing** | Slower than T1059.001's 16-sec baseline because Claude called both AbuseIPDB + VirusTotal |
+| IRIS alert created (`alert_id=217`) | 16:25:23.647 | inline | T1059.003 title |
+| **Total fire → IRIS** | | **1 min 42 s** | Cron wait dominates total; active processing = 23 s |
+
+### Enrichment exercise — both tools confirmed firing
+
+Decoded from the n8n exec_data SQLite blob (`~/.n8n/database.sqlite`):
+
+- **AbuseIPDB:** 17 references in exec data; response includes `abuseConfidenceScore: 100`, `isp: ...`. Result accurately surfaced in Claude's IRIS prose as "known Tor exit node with 100% AbuseIPDB confidence."
+- **VirusTotal:** response includes `last_analysis_stats: ...`. Hash recognized as EICAR test file. Surfaced in Claude's prose.
+- **Both tools were exercised end-to-end for the first time on the Azure stack.** v3 workflow's enrichment path is verified working in Azure.
+
+### Finding worth carrying forward — empty structured `iocs[]` despite full prose IOCs
+
+IRIS alert 217 came back with `iocs: []` in the structured field even though all 3 IOCs (IP, hash, URL) are clearly named in the `alert_description` prose with enrichment context.
+
+**Root cause:** Claude's structured output (the `submit_triage_result` tool call) chose to leave `iocs: []` because it judged the event as a synthetic test. From the prose: *"The embedded `demo-...` GUID, the EICAR hash, and the RFC2606 `.invalid` URL strongly indicate a synthetic/test event used to exercise the T1059.003 rule."*
+
+This is not a wiring bug — the JSON.stringify fix from Task 19 is correct, and the n8n → IRIS handoff is sound. It's a Claude system-prompt judgment call: when the LLM identifies the event as synthetic, it suppresses structured IOC routing. A "real-looking" event would populate `iocs[]`.
+
+**Carry-forward:** documented in [[runbook]] § Troubleshooting → "IOC enrichment fires but iocs[] is empty in IRIS." System-prompt tuning to force IOC structured-output regardless of synthetic-detection signal is future work (not P2 scope).
+
+## Decommission phase (Tasks 20-23) — 2026-05-26
+
+All 4 local VMware VMs lift-and-shifted to `F:\VMs\` then deleted from `C:\VMs`. C: drive freed +112.1 GB (49.6 → 161.7 GB). Order: Splunk (Task 20) → n8n (Task 21) → IRIS (Task 22) → Win10 endpoint (Task 23). Three out-of-scope VMs untouched in `C:\VMs`: `MyDfir-FlareVM`, `MyDfir-Remnux`, `MyDfir-Zeek-Suricata`.
+
+### Gotchas captured during decom (carry-forward)
+
+- **VMware "Delete from Disk" is selective** — it only deletes files registered in the VM's `.vmsd` snapshot index. `(1)`-suffix duplicates from prior copy/rename operations are orphans that must be cleaned up manually in File Explorer (the Splunk VM left behind 5.86 GB of these).
+- **Stale `.lck` folders from unclean shutdowns block robocopy.** Three of the four VMs (n8n, IRIS, Win10) had stale locks all with identical timestamp 2026-05-25 23:47:35 — a single unclean VMware/host event hit them all simultaneously. Fix: `Remove-Item -Recurse` on the `<vm-name>.vmx.lck` folder once the embedded PID is confirmed dead. Standard VMware troubleshooting.
 
 ## Phase 1 resource discovery (Task 3) — 2026-05-23
 

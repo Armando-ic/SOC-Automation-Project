@@ -1,9 +1,9 @@
 ---
-status: active
-updated: 2026-05-23
+status: complete
+updated: 2026-05-26
 sub_project: P2 (Azure Port)
 approach: Fresh-provision all 3 VMs in Azure (no VHD import); reuse Phase 1 VNet/RG; aggressive same-day archive + delete decommission
-related: [[README]], [[../../architecture/components/splunk]], [[../../architecture/components/n8n]], [[../../architecture/components/dfir-iris]], [[../../architecture/current-state]]
+related: [[README]], [[runbook]], [[notes]], [[comparison-latency]], [[../../architecture/components/splunk]], [[../../architecture/components/n8n]], [[../../architecture/components/dfir-iris]], [[../../architecture/current-state]]
 ---
 
 # Spec — Sub-project P2: Azure Port (v1 → Azure IaaS)

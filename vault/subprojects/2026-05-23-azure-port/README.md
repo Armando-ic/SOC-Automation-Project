@@ -1,8 +1,8 @@
 ---
-status: active
-updated: 2026-05-23
+status: complete
+updated: 2026-05-26
 sub_project: P2 (Azure Port)
-related: [[spec]], [[../../../SOC-Automation-Project-to-Azure-Port]]
+related: [[spec]], [[plan]], [[runbook]], [[notes]], [[comparison-latency]], [[../../../SOC-Automation-Project-to-Azure-Port]]
 ---
 
 # Sub-project P2 — Azure Port (v1 → Azure IaaS)
@@ -60,11 +60,15 @@ Port the local-VMware SOC stack (Splunk + n8n + DFIR-IRIS) to Azure IaaS, then d
 
 ## Status
 
+- **COMPLETE** — closed 2026-05-26 with Tasks 24–26.
 - Brainstorming complete (2026-05-23). 8 clarifying questions resolved.
-- Spec drafted at [[spec]].
-- Implementation plan: [[plan]] (created 2026-05-23).
-- Provisioning: in progress.
-- Decommission: not started.
+- Spec: [[spec]] — status complete.
+- Implementation plan: [[plan]] — executed Tasks 1–26.
+- Provisioning: complete (3 Azure VMs operational, P2 Tasks 6–19).
+- Decommission: complete (4 local VMs archived to `F:\VMs\` and deleted from `C:\VMs`, P2 Tasks 20–23).
+- Latency comparison: [[comparison-latency]] — IOC-rich fire captured 2026-05-26 with full enrichment trace.
+- Runbook: [[runbook]] — operational, troubleshooting, 6 carry-forward gotchas + 21 catalog entries.
+- Notes: [[notes]] — Task 24 IOC fire findings + decom phase gotchas appended 2026-05-26.
 
 ## References
 
