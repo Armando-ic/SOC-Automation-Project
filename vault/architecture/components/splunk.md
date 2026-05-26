@@ -1,27 +1,35 @@
 ---
 status: active
-updated: 2026-04-30
-related: [[architecture/current-state]], [[architecture/components/splunk-mcp]], [[architecture/components/sysmon]]
+updated: 2026-05-26
+related: [[architecture/current-state]], [[architecture/components/splunk-mcp]], [[architecture/components/sysmon]], [[../subprojects/2026-05-23-azure-port/runbook]]
 ---
 
 # Splunk
 
 ## What it is
 
-The SIEM. Splunk Enterprise running on Ubuntu Server (`MyDFIR-Splunk`, 192.168.129.131).
+The SIEM. Splunk Enterprise running on Ubuntu Server. **As of P2 (2026-05-26) running on Azure IaaS** (`vm-soc-v2-splunk` in `rg-soc-v2-azure-central-us`); the local-VMware host (`MyDFIR-Splunk`, 192.168.129.131) was decommissioned during P2 Task 20 and archived to `F:\VMs\MyDFIR-Splunk\`.
 
-## Configuration
+## Configuration (P2 / Azure)
 
 | | |
 |---|---|
-| Web UI | http://192.168.129.131:8000 |
-| Management API | https://192.168.129.131:8089 |
-| Receiver port (forwarders) | 9997 |
+| Host | `vm-soc-v2-splunk` (Azure VM, Central US, `Standard_D4s_v3`) |
+| Public Web UI | http://20.236.193.253:8000 (NSG-restricted to home IP) |
+| Private receiver | 10.0.0.5:9997 (intra-VNet for Sysmon UF traffic) |
+| Management API | https://10.0.0.5:8089 (internal; not exposed) |
+| Version | Splunk Enterprise **10.4.0** (build `f798d4d49089`) |
+| License | **Splunk Developer Personal License** — 10 GB/day, expires 2026-11-19 |
 | Index for project data | `mydfir-project` |
-| Admin user | `mydfir` (password in [[runbooks/secrets-management]]) |
-| MCP service user | `mcpuser` (admin role; should be downgraded — tracked) |
+| Admin user | `mydfir` (password in gitignored secrets file) |
+| Service | `Splunkd.service` (systemd; boot-start enabled) |
+| Auto-shutdown | 11 PM Eastern |
 
-Splunk is configured to start at boot via `splunk enable boot-start --user splunk`.
+See [[../subprojects/2026-05-23-azure-port/runbook]] for operational commands and gotcha catalog.
+
+## Migrated from v1 (decommissioned 2026-05-23 → 2026-05-26)
+
+Original local Splunk on `MyDFIR-Splunk` (192.168.129.131) was decommissioned during P2 Task 20. Configuration was fresh-installed in Azure rather than VHD-imported (rationale: Trial-clock reset, no historical-index migration cost). VMDK archive lives at `F:\VMs\MyDFIR-Splunk\`. Sysmon UF on `vm-soc-v2-win` was re-pointed to the new indexer at Task 12; ATH/synthetic events from the Windows endpoint now land in this Azure Splunk.
 
 ## Apps installed
 
@@ -32,14 +40,15 @@ Splunk is configured to start at boot via `splunk enable boot-start --user splun
 
 | Name | Status | Cron | Trigger | Webhook target | Notes |
 |---|---|---|---|---|---|
-| `Test-Brute-Force-External-Spoofed` | disabled | `* * * * *` (test value) | For each result | v2 production | A1/A2 development; disabled at A2 closeout 2026-04-30. Known issue: no threshold, fires on a single event. |
-| `T1059.001 - PowerShell Encoded Command` | enabled | `*/5 * * * *` | For each result | v2 production | D1 worked-example detection. See [[../../detections/t1059-001-powershell-encoded]]. |
+| `Test-Brute-Force-External-Spoofed` | disabled | `* * * * *` (test value) | For each result | n/a | A1/A2 development; disabled at A2 closeout 2026-04-30. SPL re-derived during P2 Task 11 (canonical not in vault); reconstruction-only. |
+| `T1059.001 - PowerShell Encoded Command` | enabled | `*/5 * * * *` | For each result | `http://10.0.0.6:5678/webhook/db7245f7-8451-4bea-b47d-f6ad35b818cd` | D1 worked-example detection. See [[../../detections/t1059-001-powershell-encoded]]. |
+| `T1059.003 - Suspicious cmd.exe IOC References` | enabled | `*/5 * * * *` | For each result | same n8n webhook URL | Created 2026-05-19 (demo session); back-ported to Azure Splunk 2026-05-26 during P2 Task 24 IOC validation fire. Exercises AbuseIPDB + VirusTotal naturally. SPL captured at [[../subprojects/2026-05-23-azure-port/notes]] Task 24 prep. |
 
 The brute-force search will be replaced with a properly-thresholded version as part of future detection-engineering work; tracking is captured in [[../../subprojects/2026-04-30-detection-foundations/notes]].
 
 ## Sysmon ingestion (D1)
 
-Sysmon events from the Windows 10 VM (`DESKTOP-VNEF7PC`, 192.168.129.130) land in the `mydfir-project` index alongside Windows Security/App/System events under `sourcetype=XmlWinEventLog`. **Differentiate by `source=`, not `sourcetype=`:**
+Sysmon events from the Azure Windows VM (`vm-soc-v2-win`, `10.0.0.4`; replaces the decommissioned local Win10 `DESKTOP-VNEF7PC` at 192.168.129.130) land in the `mydfir-project` index alongside Windows Security/App/System events under `sourcetype=XmlWinEventLog`. **Differentiate by `source=`, not `sourcetype=`:**
 
 ```spl
 index=mydfir-project source="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational"
@@ -60,6 +69,6 @@ Vault grep at the time confirmed no downstream consumers of the old strings. Fut
 
 ## How to access
 
-- Web UI: browser to http://192.168.129.131:8000
-- SSH: `ssh mydfir@192.168.129.131` from host PowerShell
-- MCP (programmatic): see [[architecture/components/splunk-mcp]]
+- Web UI: browser to http://20.236.193.253:8000 (NSG-restricted to home IP per [[../subprojects/2026-05-23-azure-port/runbook]])
+- SSH: `ssh -i C:\Users\Owner\.ssh\vm-soc-v2-linux-key.pem azureuser@20.236.193.253`
+- MCP (programmatic): see [[architecture/components/splunk-mcp]] (note: MCP host references need update if the splunk-mcp doc still points at 192.168.129.131)

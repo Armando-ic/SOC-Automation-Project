@@ -1,37 +1,46 @@
 ---
 status: active
-updated: 2026-05-12
-related: [[architecture/current-state]], [[workflows/soc-triage-pipeline]], [[decisions/0007-remove-slack-iris-native-gate]]
+updated: 2026-05-26
+related: [[architecture/current-state]], [[workflows/soc-triage-pipeline]], [[decisions/0007-remove-slack-iris-native-gate]], [[../subprojects/2026-05-23-azure-port/runbook]]
 ---
 
 # DFIR-Iris
 
 ## What it is
 
-Open-source incident response case management. Receives alerts from the n8n workflow, organizes them into investigations. Runs in Docker via docker-compose on Ubuntu Server 24.04 (`MyDFIR-DFIR-IRIS-VM-v2`, 192.168.129.133). VM rebuilt from scratch 2026-05-12 after the 2026-05-08 OneDrive incident.
+Open-source incident response case management. Receives alerts from the n8n workflow, organizes them into investigations. Runs in Docker via docker compose on Ubuntu Server 24.04. **As of P2 (2026-05-26) running on Azure IaaS** (`vm-soc-v2-iris` in `rg-soc-v2-azure-central-us`); the local-VMware host (`MyDFIR-DFIR-IRIS-VM-v2`, 192.168.129.133) was decommissioned during P2 Task 22 and archived to `F:\VMs\MyDFIR-DFIR-IRIS-VM-v2\`.
 
-## Configuration
+## Configuration (P2 / Azure)
 
 | | |
 |---|---|
-| VM | `MyDFIR-DFIR-IRIS-VM-v2` at `C:\VMs\MyDFIR-DFIR-IRIS-VM-v2\` |
-| Web UI | https://192.168.129.133 (HTTPS, self-signed cert) |
-| Version | v2.4.22 (verified 2026-05-12 against rebuilt instance — IOC type IDs and severity IDs unchanged from 2026-04-28 capture) |
-| Source | https://github.com/dfir-iris/iris-web (git tag `v2.4.22`, commit `f75e56fb`) |
-| Run command | `cd ~/iris-web && sudo docker-compose up -d` |
-| Admin user | `administrator` (password regenerated 2026-05-12 by fresh install; current value in `SOC-Automation-Project.md` at project root) |
-| API key | Regenerated 2026-05-12 under user settings; current value in secrets file |
-| Containers | `iriswebapp_db` (postgres) · `iriswebapp_app` · `iriswebapp_nginx` · `iriswebapp_rabbitmq` · `iriswebapp_worker` |
-| Static IP | Pinned via netplan on the Ubuntu host; cloud-init network config disabled |
+| Host | `vm-soc-v2-iris` (Azure VM, Central US, `Standard_D2s_v3`) |
+| Public Web UI | https://20.29.76.25 (HTTPS, self-signed cert; NSG-restricted to home IP) |
+| Private API endpoint | https://10.0.0.7/api/* (intra-VNet — n8n-to-IRIS leg) |
+| Version | v2.4.22 (commit `f75e56fb` — matches v1 rebuild exactly; IOC type IDs and severity IDs unchanged) |
+| Source | https://github.com/dfir-iris/iris-web (git tag `v2.4.22`) |
+| Run command | `cd ~/iris-web && docker compose up -d` (modern plugin) |
+| Admin user | `administrator` (password set via `IRIS_ADM_PASSWORD` in `.env` — explicit, not log-scraped) |
+| API key | Set via `IRIS_ADM_API_KEY` in `.env` — known from first start, no UI regeneration needed |
+| Containers | `iriswebapp_db` (postgres) · `iriswebapp_app` · `iriswebapp_nginx` (with healthcheck) · `iriswebapp_rabbitmq` · `iriswebapp_worker` |
+| Auto-shutdown | 11 PM Eastern |
 
-## Setup gotchas (validated 2026-05-12 rebuild)
+See [[../subprojects/2026-05-23-azure-port/runbook]] for operational commands; gotcha §I1–§I4 cover IRIS-specific pitfalls.
 
-### `depends_on` blocks crash older docker-compose
+## Migrated from v1 (decommissioned 2026-05-26)
 
-The shipped `docker-compose.base.yml` has three `depends_on:` directives that fail under the docker-compose-via-apt version (1.29.2). Workaround applied: **comment out the depends_on blocks** (lines 51, 80, 116 at v2.4.22 tag — the directives plus their indented service entries). Confirmed working post-rebuild 2026-05-12.
+Original local IRIS on `MyDFIR-DFIR-IRIS-VM-v2` (192.168.129.133) was decommissioned during P2 Task 22. **No Postgres `pg_dump`/restore was performed** (deviation from plan Task 19's original spec): the v1 IRIS itself was a 2026-05-12 fresh rebuild with minimal historical alerts (max alert #64 per 2026-05-19 demo log) — migration cost outweighed the benefit. Azure IRIS started clean and accumulated alerts organically during P2 verification (alerts 1–217 to date).
+
+## Setup gotchas (validated 2026-05-12 v1 rebuild; updated 2026-05-26 for P2 / Azure)
+
+### `depends_on` blocks crash older docker-compose (**OBSOLETE under modern compose-plugin**)
+
+In v1 (using `docker-compose 1.29.2` via apt), the shipped `docker-compose.base.yml`'s three `depends_on:` directives failed and required commenting out via an awk pass.
+
+**No longer required on P2 / Azure** — the modern `docker compose v5.1.4` plugin handles short-form `depends_on` cleanly. P2's IRIS install confirmed all 5 containers came up in correct order on first try with no workaround. Section preserved for context if anyone falls back to legacy `docker-compose` 1.29.x.
 
 ```bash
-# automation-safe sed via awk that comments depends_on: + immediate indented `- "..."` children
+# v1-era awk workaround (NOT needed on P2):
 awk '
   /depends_on:/ { commenting = 1; print "#" $0; next }
   commenting && /^[[:space:]]+- / { print "#" $0; next }
@@ -40,15 +49,19 @@ awk '
 ' docker-compose.base.yml.bak > docker-compose.base.yml
 ```
 
-If the project ever upgrades to docker-compose v2 (plugin form), revisit this — v2 handles `depends_on` differently and may not need the workaround.
-
 ### `.env` must be fresh-copied from `.env.model` after git clone
 
-The repo at v2.4.22 ships a 36-byte `.env` that's NOT a valid environment file (parses to nothing). Postgres then fails to start with `POSTGRES_PASSWORD not specified`. Fix: explicitly `cp .env.model .env` after `git checkout v2.4.22`, overwriting the shipped stub.
+(Persists in P2.) The repo at v2.4.22 ships a 36-byte `.env` that's NOT a valid environment file (parses to nothing). Postgres then fails to start with `POSTGRES_PASSWORD not specified`. Fix: explicitly `cp .env.model .env` after `git checkout v2.4.22`, overwriting the shipped stub.
 
-### Admin password displays once on first `docker-compose up`
+### Admin password and API key can be set explicitly in `.env` (P2 improvement over v1 log-scraping)
 
-The `iriswebapp_app` container's first run generates a random admin password and **only prints it once to stdout**. Per the tutorial — *don't clear your terminal until you've copied it*. Or use `docker-compose up -d` and `docker-compose logs app | grep -i "password"` to retrieve after the fact (this is what we did 2026-05-12).
+V1 relied on the `iriswebapp_app` container's first-run random password printed once to stdout (capture via `docker-compose logs app | grep -i "password"`).
+
+**P2 / Azure pattern is cleaner:** set `IRIS_ADM_PASSWORD=...` and `IRIS_ADM_API_KEY=...` explicitly in `.env` (both documented as optional in `.env.model`, commented out by default). Uncomment + set both before first `docker compose up -d`. Result: known password + known API key from first start — no log-scraping, no UI regeneration. Useful for automation and reproducible rebuilds.
+
+### Benign DB log warning during first start
+
+Don't chase: `"duplicate key value violates unique constraint groups_group_name_key" Key (group_name)=(Analysts) already exists`. IRIS's init script tries to insert default groups and catches the conflict downstream. Harmless.
 
 ## API integration
 
@@ -81,7 +94,7 @@ Required by A2's `Extract Triage Result` Code node when building the `alert_iocs
 | `sha1`   | `sha1`   | **111** |
 | `sha256` | `sha256` | **113** |
 
-Source: `GET /manage/ioc-types/list` on the Iris instance at `192.168.129.133`.
+Source: `GET /manage/ioc-types/list` on the Iris instance at `20.29.76.25` (public) / `10.0.0.7` (private, intra-VNet).
 
 Notes on the choices:
 
@@ -93,7 +106,7 @@ To re-capture:
 
 ```bash
 curl -ks -H "Authorization: Bearer <iris-api-key>" \
-  https://192.168.129.133/manage/ioc-types/list \
+  https://20.29.76.25/manage/ioc-types/list \
   | python -c "
 import json, sys
 d = json.load(sys.stdin)['data']
@@ -116,7 +129,7 @@ To recapture the full status catalog:
 
 ```bash
 curl -ks -H "Authorization: Bearer <iris-api-key>" \
-  https://192.168.129.133/manage/alert-status/list | python -m json.tool
+  https://20.29.76.25/manage/alert-status/list | python -m json.tool
 ```
 
 ## Severity IDs (captured 2026-04-28, reverified 2026-05-12 — unchanged)
@@ -150,7 +163,7 @@ To re-capture:
 
 ```bash
 curl -ks -H "Authorization: Bearer <iris-api-key>" \
-  https://192.168.129.133/manage/severities/list \
+  https://20.29.76.25/manage/severities/list \
   | python -m json.tool
 ```
 

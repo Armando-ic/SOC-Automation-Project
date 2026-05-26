@@ -1,39 +1,49 @@
 ---
 status: active
-updated: 2026-05-12
-related: [[architecture/current-state]], [[workflows/soc-triage-pipeline]], [[decisions/0007-remove-slack-iris-native-gate]]
+updated: 2026-05-26
+related: [[architecture/current-state]], [[workflows/soc-triage-pipeline]], [[decisions/0007-remove-slack-iris-native-gate]], [[../subprojects/2026-05-23-azure-port/runbook]]
 ---
 
 # n8n
 
 ## What it is
 
-Workflow automation engine playing the SOAR role. Runs in Docker via docker-compose on Ubuntu Server 24.04 (`MyDFIR-n8n-VM-v2`, 192.168.129.132). VM rebuilt from scratch 2026-05-12 after the 2026-05-08 OneDrive incident — see [[../subprojects/2026-04-30-detection-foundations/notes#phase-11-2026-05-12--post-rebuild-revalidation-on-rebuilt-lab]] for rebuild details.
+Workflow automation engine playing the SOAR role. Runs in Docker via docker compose on Ubuntu Server 24.04. **As of P2 (2026-05-26) running on Azure IaaS** (`vm-soc-v2-n8n` in `rg-soc-v2-azure-central-us`); the local-VMware host (`MyDFIR-n8n-VM-v2`, 192.168.129.132) was decommissioned during P2 Task 21 and archived to `F:\VMs\MyDFIR-n8n-VM-v2\`.
 
-## Configuration
+## Configuration (P2 / Azure)
 
 | | |
 |---|---|
-| VM | `MyDFIR-n8n-VM-v2` at `C:\VMs\MyDFIR-n8n-VM-v2\` |
-| Web UI | http://192.168.129.132:5678 |
+| Host | `vm-soc-v2-n8n` (Azure VM, Central US, `Standard_D2s_v3`) |
+| Public Web UI | http://52.173.105.92:5678 (NSG-restricted to home IP) |
+| Private webhook target | http://10.0.0.6:5678 (intra-VNet — Splunk-to-n8n leg) |
 | Default port | 5678 |
-| Run command | `cd ~/n8n-compose && sudo docker-compose up -d` |
-| Image | `n8nio/n8n:latest` (pulled 2026-05-12) |
-| Data volume | `~/n8n-compose/n8n_data/` (chowned to UID:GID 1000:1000) |
-| Compose env | `N8N_HOST=192.168.129.132`, `N8N_PORT=5678`, `N8N_PROTOCOL=http`, **`N8N_SECURE_COOKIE=false`** (see Known quirks) |
-| Docker / compose | Docker 29.1.3, docker-compose 1.29.2 |
-| Static IP | Pinned via netplan; cloud-init network config disabled (`/etc/cloud/cloud.cfg.d/99-disable-network-config.cfg`) |
+| Run command | `cd ~ && docker compose up -d` (modern compose-plugin, not legacy `docker-compose`) |
+| Image | `n8nio/n8n:2.21.7` (Docker Hardened Image, digest `sha256:9f1f8e4c…`, pulled 2026-05-25 — pinned to this digest for reproducible rebuilds) |
+| Data volume | bind-mount `~/.n8n:/home/node/.n8n` (container runs as UID 1000 = `azureuser`) |
+| Compose env | `N8N_HOST=52.173.105.92`, `N8N_PROTOCOL=http`, `N8N_SECURE_COOKIE=false`, `WEBHOOK_URL=http://52.173.105.92:5678/`, `GENERIC_TIMEZONE=America/New_York` |
+| Docker / compose | Docker Engine + `docker compose v5.1.4` plugin (not legacy `docker-compose 1.29.x`) |
+| Auth | **n8n native user management** (owner: `owner@example.com` / secrets file). **NOT `N8N_BASIC_AUTH_*`** — deprecated since n8n 1.0+ |
+| Auto-shutdown | 11 PM Eastern |
 
-## Configured credentials in n8n (post-2026-05-12 rebuild)
+See [[../subprojects/2026-05-23-azure-port/runbook]] for operational commands; gotcha §N1–§N5 cover community-node + UI pitfalls.
 
-After the 2026-05-12 fresh n8n install, the credential IDs are new (the old IDs `VozkiMP8QqbykLLj`, `IWEqjD1DvRajiKXy`, etc. are v2 artifacts and don't exist on the rebuilt instance). The workflow JSON references the OLD IDs, so each credential must be re-bound to the corresponding node post-import.
+## Migrated from v1 (decommissioned 2026-05-26)
+
+Original local n8n on `MyDFIR-n8n-VM-v2` (192.168.129.132) was decommissioned during P2 Task 21. Workflow JSON (`JSON/SOC-Triage-v3.json`) was re-imported on Azure; 4 credentials recreated from the gitignored secrets file. Webhook GUID `db7245f7-8451-4bea-b47d-f6ad35b818cd` survived JSON import unchanged (matches the v3-era GUID preserved during 2026-05-12 v1 rebuild specifically so Splunk needed no change).
+
+## Configured credentials in n8n (post-2026-05-25 Azure install)
+
+After the 2026-05-25 fresh n8n install on Azure, the credential IDs are again new — the workflow JSON's OLD credential IDs (`VozkiMP8QqbykLLj`, `IWEqjD1DvRajiKXy`, etc. from v1) don't exist on the rebuilt instance. Each credential must be re-bound to the corresponding node post-import.
 
 | Credential | n8n type | Used by | Notes |
 |---|---|---|---|
 | Anthropic account | `anthropicApi` | Message a model node | API key from gitignored secrets file |
 | VirusTotal account | `virusTotalApi` | lookup_file_hash_virustotal (AI tool) | API key from secrets file |
 | AbuseIPDB account | `httpHeaderAuth` (Header Auth) | enrich_ip_abuseipdb (AI tool) | Header name `Key`, value is API key. **Migrated from v0-inline-key to credential during A1.** |
-| DFIR-IRIS account | `dfirIrisApi` | Create Iris Alert (HTTP Request) | Host `https://192.168.129.133`, Bearer API key from secrets file. **Enable "Ignore SSL Issues" — IRIS uses self-signed cert.** |
+| DFIR IRIS account | `dfirIrisApi` (community node `n8n-nodes-dfir-iris` v2.0.3) | Add new Alert node | Host `https://10.0.0.7` (IRIS private IP — intra-VNet), API Version `2.0.4`, Use HTTP OFF, **Ignore SSL Issues ON** (self-signed). Bearer API key from `IRIS_ADM_API_KEY` in `~/iris-web/.env` on `vm-soc-v2-iris`. |
+
+**Community-node swap (P2 deviation from v3 JSON):** The v3 workflow's "Create Iris Alert" was an `n8n-nodes-base.httpRequest` referencing a hand-registered `dfirIrisApi` custom credential type. On a fresh n8n install (no custom credential file), the JSON imports with a broken Iris node. P2 swapped this to the upstream community package `n8n-nodes-dfir-iris` v2.0.3 (`barn4k`) — more reproducible (one npm install vs. hunting for a custom credential file). See [[../subprojects/2026-05-23-azure-port/notes]] Task 15. The **`Add IOCs (JSON)`** field on this node MUST be `{{ $json.alert_iocs }}` raw — NOT `{{ JSON.stringify($json.alert_iocs) }}` (Gotcha §N1 in the P2 runbook; root-cause analysis at [[../subprojects/2026-05-23-azure-port/notes]] Task 19 gotcha #1).
 
 **Slack credential intentionally absent** as of v3 (ADR 0007 — human approval moved to IRIS-native review).
 
@@ -55,15 +65,17 @@ After the 2026-05-12 fresh n8n install, the credential IDs are new (the old IDs 
 
 For a lab on a private NAT-only subnet this is fine. For internet-exposed deployment it would not be.
 
-### docker-compose 1.29.2 `--force-recreate` is broken against newer Docker
+### docker-compose 1.29.2 `--force-recreate` was broken against newer Docker (**HISTORICAL — v1 only**)
 
-`docker-compose up -d --force-recreate` fails with `KeyError: 'ContainerConfig'` in `/usr/lib/python3/dist-packages/compose/service.py` because newer Docker (29.x) deprecated that field in image inspect output. Workaround: `docker-compose down && docker-compose up -d` instead of using `--force-recreate`.
+In v1, `docker-compose up -d --force-recreate` failed with `KeyError: 'ContainerConfig'` in `/usr/lib/python3/dist-packages/compose/service.py` because newer Docker (29.x) deprecated that field in image inspect output. Workaround was: `docker-compose down && docker-compose up -d` instead of using `--force-recreate`.
 
-## How to access
+**No longer applicable on P2 / Azure** — the modern `docker compose v5.1.4` plugin (replaces the legacy `docker-compose 1.29.x` Python tool) does not exhibit this bug. Section preserved for archive context.
 
-- Web UI: http://192.168.129.132:5678
-- SSH: `ssh mydfir@192.168.129.132`
-- See [[runbooks/n8n-workflow-deployment]] for deploying changes
+## How to access (P2 / Azure)
+
+- Web UI: http://52.173.105.92:5678
+- SSH: `ssh -i C:\Users\Owner\.ssh\vm-soc-v2-linux-key.pem azureuser@52.173.105.92`
+- See [[runbooks/n8n-workflow-deployment]] for deploying changes (note: runbook IPs need update if not yet refreshed)
 
 ## Wait-node resume URLs are signed (captured 2026-04-29)
 
