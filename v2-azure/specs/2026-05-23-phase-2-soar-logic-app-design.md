@@ -1,17 +1,25 @@
 ---
-status: deferred
+status: active
 created: 2026-05-23
 deferred: 2026-05-23
+resumed: 2026-05-26
 ---
 
-> **⏸ Deferred 2026-05-23.** Originally labeled "Phase 2." A new intermediate phase — **Port to Azure** (lift-and-shift v1 to Azure IaaS) — was inserted as the new Phase 2 later the same day. This spec becomes **Phase 3** once that port is stable. Content of the spec is unchanged and still applies; only the phase number and execution timing change. See [`../../SOC-Automation-Project-to-Azure-Port.md`](../../SOC-Automation-Project-to-Azure-Port.md) for current direction.
+> **▶ Resumed 2026-05-26.** Phase 2 (the lift-and-shift Azure Port that interrupted this work) shipped 2026-05-26. This spec is now **the active "Phase 3" direction.** Title and filename still say "Phase 2" for git-history continuity — read every "Phase 2" in this document as "Phase 3" under the post-2026-05-23-reversal numbering. Plan execution starts at [`../plans/2026-05-23-phase-2-soar-logic-app-plan.md`](../plans/2026-05-23-phase-2-soar-logic-app-plan.md) (which also has a resume context block).
+>
+> **What changed since this spec was written (2026-05-23) that's worth knowing:**
+> - **Phase 1 foundation is intact** but verify on first task — the AMA service on `vm-soc-v2-win` was anomalous during P2 Task 12 (Sysmon UF install): `Get-Service AzureMonitorAgent` returned not-installed. May be a service-name-renames issue (extension-based AMA shows up as `AMAExtHandler`), or may be a real gap. Either way, run a live-fire pre-flight before assuming the Phase 1 trigger chain works.
+> - **Splunk + n8n + IRIS now live in Azure** (`vm-soc-v2-splunk` / `vm-soc-v2-n8n` / `vm-soc-v2-iris` in the same RG as `vm-soc-v2-win`). Independent of this spec — Phase 3 doesn't touch them — but useful context for the comparison commentary in Task 20's deliverable doc. The v1 SOAR side is now a moving Azure target, not a stale VMware artifact.
+> - **A second saved search shipped during P2** (`T1059.003 - Suspicious cmd.exe IOC References`, 2026-05-19 origin, back-ported to Azure 2026-05-26). The Sentinel side does not yet have a T1059.003 analytics rule. Phase 3 keeps T1059.001 only per spec scope (S2 design future-proofs for D2/D3); adding T1059.003-KQL is a detection-engineering follow-on, not Phase 3 scope.
+> - **Empty `iocs[]` finding from P2 Task 24:** Claude judges obvious-synthetic events (demo-GUID, EICAR hash, `.invalid` URL) and suppresses structured-IOC output even when prose surfaces them all with full enrichment. **Same behavior will appear on the Logic Apps side** — not a Phase 3 bug, identical Claude system-prompt; document in Phase 3 acceptance prose if observed, don't chase as a Logic-Apps wiring issue.
 
 **Related:**
-- [SOC-Automation-Project Port to Azure (active direction)](../../SOC-Automation-Project-to-Azure-Port.md)
 - [v2-azure README](../README.md)
 - [v2-azure architecture (Phase 1)](../architecture/current-state.md)
 - [Phase 1 detection doc — T1059.001 KQL port](../detections/t1059-001-powershell-encoded-azure.md)
 - [v1 SOC Triage v3 pipeline (vault)](../../vault/workflows/soc-triage-pipeline.md)
+- [P2 Azure Port runbook (v2-azure branch)](../../vault/subprojects/2026-05-23-azure-port/runbook.md) — the parallel-implementation v1 stack now lives in Azure too, with operational docs
+- [SOC-Automation-Project Port to Azure (historical — superseded by P2 completion)](../../SOC-Automation-Project-to-Azure-Port.md)
 
 
 # Phase 2 — SOAR Layer (Logic Apps): Design

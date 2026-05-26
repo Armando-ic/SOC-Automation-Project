@@ -1,7 +1,7 @@
 # Phase 2 — SOAR Layer (Logic Apps) Implementation Plan
 
-> **⏸ DEFERRED 2026-05-23.** Originally labeled "Phase 2." A new intermediate phase — **Port to Azure** (lift-and-shift v1 to Azure IaaS) — was inserted as the new Phase 2 later the same day. This plan becomes **Phase 3** and resumes only after the port is stable. Plan content is unchanged and still valid; only execution timing and phase number change. Active direction: [`../../SOC-Automation-Project-to-Azure-Port.md`](../../SOC-Automation-Project-to-Azure-Port.md). Execution history before deferral: branch state verified (Task 1 Step 1), no portal work performed.
-
+> **▶ RESUMED 2026-05-26.** Phase 2 (the intermediate Azure Port that interrupted this work) shipped 2026-05-26. This plan is now active and is conceptually **Phase 3** under the post-2026-05-23-reversal numbering. Filename and title still say "Phase 2" for git-history continuity — read every "Phase 2" reference as "Phase 3." See [spec resume-context block](../specs/2026-05-23-phase-2-soar-logic-app-design.md) for what changed in the intervening period (P2 shipped, AMA anomaly on `vm-soc-v2-win` to verify before starting, T1059.003 saved search added on Splunk side but NOT on Sentinel side, Claude empty-`iocs[]` synthetic-event judgment behavior carries over).
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Ship the Microsoft-native equivalent of v1's SOC Triage v3 n8n workflow — a single Azure Logic App (Consumption) that triages Sentinel incidents tagged `automation:claude-triage` via Claude tool-use (AbuseIPDB + VirusTotal enrichment, structured triage output) and writes back to the Sentinel incident.
@@ -41,20 +41,70 @@ The plan's "Smoke test" steps use one of these. Each task verifies that the *cum
 
 ---
 
-## Task 1: Setup verification (fixture capture deferred to Task 16)
+## Task 1: Setup verification + Phase 1 trigger-chain live-fire pre-flight
 
 **Files:** none
 
 **Why fixture is deferred:** The original plan had us capture a real Sentinel incident JSON upfront. In practice, this is friction without payoff — neither portal export (CSV-only) nor `az` CLI was an acceptable path. The cleaner shape: smoke tests during Tasks 3-13 use the Logic Apps designer's auto-generated payload template OR minimal inline IOC-rich payloads provided per-step. The actual fixture file gets captured from a real successful run after Task 15 (acceptance run) and committed as part of Task 16.
 
+**Why the new live-fire pre-flight (Steps 3-5):** During the intervening P2 (Azure Port) work, `Get-Service AzureMonitorAgent` on `vm-soc-v2-win` returned not-installed (P2 Task 12 captured anomaly). The Phase 3 trigger chain requires AMA → LAW → analytics rule → Sentinel incident. If AMA is genuinely broken, Phase 3 stalls at trigger creation. Pre-flight verifies the entire upstream chain still works on a fresh fire **before** spending portal time on Key Vault + Logic App provisioning.
+
 - [ ] **Step 1: Confirm branch state**
 
 Run: `git -C SOC_Automation_Project status && git -C SOC_Automation_Project branch --show-current`
-Expected: `On branch v2-azure ... working tree clean` AND current branch is `v2-azure`.
+Expected: `On branch v3-microsoft-native ... working tree clean` AND current branch is `v3-microsoft-native`.
 
-- [ ] **Step 2: Confirm Phase 1 incident exists**
+(The original plan said `v2-azure`. That branch is now the permanent home of the Azure Port — DO NOT execute Phase 3 work on `v2-azure`. Phase 3 work happens here on `v3-microsoft-native` where this plan lives.)
 
-Open Sentinel (portal.azure.com → search "Microsoft Sentinel" → select `law-soc-v2-azure` workspace → Incidents). Verify Incident #10 (T1059.001 PowerShell Encoded Command) is visible. This confirms Phase 1's foundation is intact.
+- [ ] **Step 2: Confirm a recent Phase 1 incident exists OR is reachable**
+
+Open Sentinel (portal.azure.com → search "Microsoft Sentinel" → select `law-soc-v2-azure` workspace → Incidents). Look for **the most recent** "T1059.001 - PowerShell Encoded Command" incident. (The original plan referenced Incident #10 — likely stale by 2026-05-26+; trust whatever the latest one is. Phase 1 + recent P2 testing may have created additional incidents.)
+
+If no T1059.001 incident exists in the Sentinel workspace at all, the trigger chain has been broken at some point since 2026-05-22 — proceed to Step 3 to verify whether a fresh fire reaches Sentinel.
+
+- [ ] **Step 3: Live-fire the trigger chain (AMA-side verification)**
+
+Start `vm-soc-v2-win` if deallocated. Via Azure portal Run Command (`vm-soc-v2-win` → Operations → Run command → RunPowerShellScript), paste:
+
+```powershell
+$ts = Get-Date -Format 'HH:mm:ss'
+$enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes("Write-Host `"Phase3-preflight-$ts`""))
+"Firing Phase 3 pre-flight at $ts UTC=$([DateTime]::UtcNow.ToString('HH:mm:ss'))"
+powershell.exe -NoProfile -EncodedCommand $enc
+"Fired."
+```
+
+This is the same shape as the Phase 1 T1059.001 analytics rule's KQL match (Sysmon EventID=1 + PowerShell + EncodedCommand). It should propagate AMA → LAW → analytics rule → Sentinel incident.
+
+- [ ] **Step 4: Verify event reaches Log Analytics**
+
+Wait ~3-7 minutes (Phase 1 baseline latency). Run a KQL query in the LAW (`law-soc-v2-azure` → Logs):
+
+```kql
+Event
+| where TimeGenerated > ago(15m)
+| where Source == "Microsoft-Windows-Sysmon"
+| where RenderedDescription contains "Phase3-preflight"
+| project TimeGenerated, Computer, EventID, RenderedDescription
+| take 5
+```
+
+Expected: 1+ rows matching the synthetic fire, ingested within 5-10 min of Step 3.
+
+If 0 rows after 15 min: **AMA path is broken.** Diagnose first:
+- Service-name check (RDP into `vm-soc-v2-win`): `Get-Service | Where-Object {$_.Name -like '*Monitor*' -or $_.Name -like '*AMA*'}`. Real AMA may be running as `AzureMonitorWindowsAgent` or `AMAExtHandler`, not `AzureMonitorAgent`.
+- Extension check (portal): `vm-soc-v2-win` → Extensions + applications → look for `AzureMonitorWindowsAgent`. Should be "Provisioning succeeded."
+- DCR check (portal): the Data Collection Rule from Phase 1 should associate this VM as a resource. Verify in Azure Monitor → Data Collection Rules → the Phase 1 DCR → Resources tab.
+
+Fix AMA before continuing. Phase 3 has no path forward without this.
+
+- [ ] **Step 5: Verify Sentinel incident materializes**
+
+Wait up to 5 more minutes after Step 4's event appears in LAW (analytics rule runs on its own schedule). Sentinel → Incidents → confirm a new "T1059.001 - PowerShell Encoded Command" incident appears with creation time post-Step-3 fire.
+
+If LAW has the event but no incident materializes: the analytics rule is misconfigured/disabled. Sentinel → Analytics → confirm the T1059.001 rule from Phase 1 is **Enabled** and its scheduled-rule cadence hasn't been disabled. Re-enable + wait one rule tick.
+
+When this step succeeds: **Phase 1 foundation is verified end-to-end.** Note the incident ID (or just remember "the most recent one"); it's the body Task 14 Step 2 ("manually fire the rule on an existing incident") will replay against.
 
 ---
 
