@@ -107,4 +107,4 @@ sequenceDiagram
 
 ## Known limitation
 
-The T1059.001 rule *projects* `Hashes` but does not **map** a FileHash entity, and the technique carries no IP — so Claude receives no enrichable IOC and the VirusTotal/AbuseIPDB enrichment tools (the dashed edges above) do not fire on this detection in production. Next step: map the SHA256 from `Hashes` as a FileHash entity to exercise the enrichment path end-to-end. Details in [`../logic-app/DELIVERABLE.md`](../logic-app/DELIVERABLE.md#8-known-limitation--next-step).
+The T1059.001 rule *projects* `Hashes` but does not **map** a FileHash entity, and the technique carries no IP — so Claude receives no enrichable IOC and the VirusTotal/AbuseIPDB enrichment tools (the dashed edges above) do not fire on this detection in production. Next step: map the SHA256 from `Hashes` as a FileHash entity to exercise the enrichment path end-to-end. Details in [`../logic-app/DELIVERABLE.md`](../logic-app/DELIVERABLE.md#8-known-limitation--next-step-being-honest).
