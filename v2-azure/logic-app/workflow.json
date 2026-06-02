@@ -252,6 +252,12 @@
                         "runtimeConfiguration": {
                             "contentTransfer": {
                                 "transferMode": "Chunked"
+                            },
+                            "secureData": {
+                                "properties": [
+                                    "inputs",
+                                    "outputs"
+                                ]
                             }
                         }
                     },
@@ -379,6 +385,12 @@
                                                                         "runtimeConfiguration": {
                                                                             "contentTransfer": {
                                                                                 "transferMode": "Chunked"
+                                                                            },
+                                                                            "secureData": {
+                                                                                "properties": [
+                                                                                    "inputs",
+                                                                                    "outputs"
+                                                                                ]
                                                                             }
                                                                         }
                                                                     },
@@ -415,7 +427,7 @@
                                                                     "Call_Virustotal": {
                                                                         "type": "Http",
                                                                         "inputs": {
-                                                                            "uri": "@concat('https://www.virustotal.com/api/v3/files/', items('For_each_tool_use_block')?['input']?['hash'])",
+                                                                            "uri": "@concat('https://www.virustotal.com/api/v3/files/', uriComponent(items('For_each_tool_use_block')?['input']?['hash']))",
                                                                             "method": "GET",
                                                                             "headers": {
                                                                                 "x-apikey": "@{body('Get_VirusTotal_key')?['value']}",
@@ -432,6 +444,12 @@
                                                                         "runtimeConfiguration": {
                                                                             "contentTransfer": {
                                                                                 "transferMode": "Chunked"
+                                                                            },
+                                                                            "secureData": {
+                                                                                "properties": [
+                                                                                    "inputs",
+                                                                                    "outputs"
+                                                                                ]
                                                                             }
                                                                         }
                                                                     },
@@ -766,7 +784,7 @@
                     "method": "post",
                     "body": {
                         "incidentArmId": "@triggerBody()?['object']?['id']",
-                        "message": "@{concat('## Claude triage (claude-opus-4-7)\n\n**Severity:** ', coalesce(variables('triage_result')?['severity'], '(none)'), '\n**MITRE:** ', if(empty(coalesce(variables('triage_result')?['mitre_techniques'], createArray())), '(none)', join(variables('triage_result')?['mitre_techniques'], ', ')), '\n\n', coalesce(variables('triage_result')?['summary'], '(no summary produced)'), '\n\n### IOCs enriched\n', if(empty(coalesce(variables('triage_result')?['iocs_enriched'], createArray())), '(none)', concat('See ', string(length(variables('triage_result')?['iocs_enriched'])), ' `ioc:*` tag(s) on this incident.')))}"
+                        "message": "@{concat('## Claude triage (claude-opus-4-7)\n\n**Severity:** ', coalesce(variables('triage_result')?['severity'], '(none)'), '\n**MITRE:** ', if(empty(coalesce(variables('triage_result')?['mitre_techniques'], createArray())), '(none)', replace(replace(replace(replace(join(variables('triage_result')?['mitre_techniques'], ', '), '[', '('), ']', ')'), '<', '&lt;'), '>', '&gt;')), '\n\n', replace(replace(replace(replace(coalesce(variables('triage_result')?['summary'], '(no summary produced)'), '[', '('), ']', ')'), '<', '&lt;'), '>', '&gt;'), '\n\n### IOCs enriched\n', if(empty(coalesce(variables('triage_result')?['iocs_enriched'], createArray())), '(none)', concat('See ', string(length(variables('triage_result')?['iocs_enriched'])), ' `ioc:*` tag(s) on this incident.')))}"
                     },
                     "path": "/Incidents/Comment"
                 }
