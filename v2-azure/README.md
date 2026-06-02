@@ -1,7 +1,7 @@
 # SOC_Automation_Project — v2-Azure (Microsoft Sentinel + Azure-native implementation)
 
-> **⏸ Phase 2 (Microsoft-native SOAR) is DEFERRED as of 2026-05-23.**
-> A new intermediate phase — **Port to Azure** — lift-and-shifts v1 (Splunk + n8n + DFIR-Iris) from local VMware to Azure IaaS first. Read [`../SOC-Automation-Project-to-Azure-Port.md`](../SOC-Automation-Project-to-Azure-Port.md) for the active direction. The v2-azure Microsoft-native work in this branch resumes *after* that port stabilizes.
+> **✅ Microsoft-native SOAR layer SHIPPED 2026-06-02.** A Sentinel-triggered Azure Logic App (`la-soc-v2-triage-claude`) runs the v1 Claude tool-use triage loop natively and writes structured triage straight back into the Sentinel incident — validated end-to-end, fully automatic, on real Sentinel incident #14. **Deliverable:** [`logic-app/DELIVERABLE.md`](logic-app/DELIVERABLE.md) · **Rebuild guide:** [`logic-app/runbook.md`](logic-app/runbook.md) · **Workflow:** [`logic-app/workflow.json`](logic-app/workflow.json).
+> *(This SOAR work is labeled **"Phase 3 (Microsoft-native SOAR)"** on its branch `v3-microsoft-native` — it's the 3rd implementation iteration but the 2nd phase of this v2-Azure roadmap. The intermediate **Port-to-Azure** phase — lift-and-shift v1 to Azure IaaS — shipped 2026-05-26; see [`../SOC-Automation-Project-to-Azure-Port.md`](../SOC-Automation-Project-to-Azure-Port.md).)*
 
 This branch implements the same end-to-end SOC pipeline as `main` (Splunk + n8n + DFIR-Iris on private VMware NAT) but on Azure-native tooling. The two branches together form a comparison narrative: *"Same end-to-end SOC pipeline in two stacks — what translated and what didn't."*
 
@@ -13,9 +13,9 @@ This branch implements the same end-to-end SOC pipeline as `main` (Splunk + n8n 
 |---|---|---|
 | **SIEM** | Splunk Enterprise 10.2.2 | Microsoft Sentinel (Log Analytics workspace) |
 | **Endpoint telemetry** | Sysmon 15.20 + SwiftOnSecurity config + Splunk Universal Forwarder on Win10 VMware VM | Sysmon (same config, TBD install path) + Azure Monitor Agent (AMA) on Azure Windows VM |
-| **SOAR** | n8n on Ubuntu Server 24.04 (docker-compose) | Logic Apps OR Azure Functions (decision in Phase 2) |
+| **SOAR** | n8n on Ubuntu Server 24.04 (docker-compose) | **Azure Logic App (Consumption)** — Sentinel-triggered, hand-built Claude tool-use `Until` loop |
 | **AI triage** | Claude API (Opus 4.7) with tool-use: VirusTotal + AbuseIPDB enrichment + `submit_triage_result` structured-output schema | Same Claude API contract — only the SOAR invocation layer changes |
-| **Case management** | DFIR-Iris v2.4.22 (Ubuntu / docker-compose) | TBD Phase 2 — either keep DFIR-Iris cross-cloud, or replace with Microsoft Defender XDR / Sentinel-native incidents |
+| **Case management** | DFIR-Iris v2.4.22 (Ubuntu / docker-compose) | **Sentinel-native incidents** — comment + severity + IOC tags on the incident the SIEM raised; no DFIR-Iris |
 | **Lab infrastructure** | VMware Workstation Pro, private NAT subnet `192.168.129.0/24` | Azure subscription on `owner@example.com`, **Central US** region |
 | **Working comparison detection** | T1059.001 PowerShell Encoded Command — Splunk saved search → n8n webhook → Claude → IRIS alert #4 (validated 2026-05-12) | T1059.001 ported to KQL — first end-to-end alert firing in v2 is the Phase 1 goal |
 
@@ -58,11 +58,30 @@ This branch implements the same end-to-end SOC pipeline as `main` (Splunk + n8n 
 
 **Full commentary** in [`detections/t1059-001-powershell-encoded-azure.md#v1--v2-comparison-the-portfolio-value`](detections/t1059-001-powershell-encoded-azure.md#v1--v2-comparison-the-portfolio-value).
 
-## Phase 2 — SOAR layer (queued)
+## Phase 2 — SOAR layer (SHIPPED 2026-06-02 · "Phase 3" on `v3-microsoft-native`)
 
-- [ ] Decision: Logic Apps vs. Azure Functions for the SOAR layer
-- [ ] Wire Sentinel incident → SOAR trigger → Claude API call (same tool-use contract as v1)
-- [ ] Decide: keep DFIR-Iris cross-cloud, or migrate to Sentinel-native incidents
+- [x] Decision: **Logic Apps** (Consumption) over Azure Functions — keeps the agent loop visible in the designer
+- [x] Wire Sentinel incident → Automation Rule → Logic App → Claude API call (same 3-tool A1 contract as v1, verbatim)
+- [x] Decided: **Sentinel-native incidents** — no DFIR-Iris; the incident object is the case terminal
+- [x] Secrets in Key Vault + managed identity (no keys in workflow JSON), `secureData`-masked
+- [x] Self-conducted security review + hardening (secret masking, prompt-injection-resistant tool-arg encoding, analyst-comment sanitization)
+- [x] Validated end-to-end, fully automatic, on Sentinel incident #14 (2026-06-02)
+
+**Deliverable:** [`logic-app/DELIVERABLE.md`](logic-app/DELIVERABLE.md) · **Rebuild runbook:** [`logic-app/runbook.md`](logic-app/runbook.md) · **Workflow JSON:** [`logic-app/workflow.json`](logic-app/workflow.json)
+
+### Phase 2 (SOAR) results — incident #14 (2026-06-02)
+
+| Dimension | v1 (Splunk + n8n + IRIS) | v2 (Sentinel + Logic App) | Verdict |
+|---|---|---|---|
+| Claude tool contract | 3 tools, A1 schema | same 3 tools, **verbatim** | parity (by design) |
+| Agent loop | n8n LangChain node | hand-built Logic App `Until` loop | v2 more transparent, more verbose |
+| Secrets | n8n creds / plaintext | Key Vault + MI, `secureData`-masked | **v2 win** |
+| Trigger | Splunk webhook | RBAC-gated Automation Rule (no public endpoint) | **v2 win** |
+| Case write-back | DFIR-Iris API | native Sentinel incident (comment + severity + tags) | **v2 win** (one fewer product) |
+| SOAR-layer latency | ~seconds | **30.58s** Logic App run | comparable (Claude-bound) |
+| End-to-end (event→triaged) | ~15s | ~12 min | v2 regression — scheduled-rule cadence dominates, not the SOAR engine |
+
+Full commentary, engineering lessons, and the security-review writeup in [`logic-app/DELIVERABLE.md`](logic-app/DELIVERABLE.md).
 
 ## Phase 3 — Compare, write up, publish (queued)
 

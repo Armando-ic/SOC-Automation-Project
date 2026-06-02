@@ -1,9 +1,13 @@
 ---
-status: active
+status: shipped
 created: 2026-05-23
 deferred: 2026-05-23
 resumed: 2026-05-26
+shipped: 2026-06-02
 ---
+
+> **✅ SHIPPED 2026-06-02.** The Phase 3 SOAR layer is live and validated end-to-end on real Sentinel incident #14 (fully automatic `fire → Sysmon → AMA → LAW → analytics rule → incident → automation rule → Logic App → Claude triage → write-back`). Deliverable + acceptance evidence: [`../logic-app/DELIVERABLE.md`](../logic-app/DELIVERABLE.md); rebuild guide: [`../logic-app/runbook.md`](../logic-app/runbook.md); shipped workflow: [`../logic-app/workflow.json`](../logic-app/workflow.json).
+> **Design deviations from this spec, as built:** (1) **Trigger** — the Automation Rule conditions on the **analytics-rule name**, not on a pre-existing tag. A single Standard rule both *adds* the `automation:claude-triage` tag and runs the playbook, in order; the tag became an output label, not the firing condition (analytics rules have no free-text incident-tag field, and a two-rule tag→playbook chain risks an Order-collision silent no-fire). (2) **Security hardening** — three post-ship fixes: `secureData` on all secret-bearing HTTP actions, `uriComponent()` on the model-supplied VirusTotal hash, and markdown-sanitization of Claude's analyst-facing comment (DELIVERABLE §7). (3) **Enrichment not exercised on T1059.001** — the detection surfaces no IP/hash IOC, so the VT/AbuseIPDB tool legs validated in smoke tests didn't fire in the production acceptance run (DELIVERABLE §8).
 
 > **▶ Resumed 2026-05-26.** Phase 2 (the lift-and-shift Azure Port that interrupted this work) shipped 2026-05-26. This spec is now **the active "Phase 3" direction.** Title and filename still say "Phase 2" for git-history continuity — read every "Phase 2" in this document as "Phase 3" under the post-2026-05-23-reversal numbering. Plan execution starts at [`../plans/2026-05-23-phase-2-soar-logic-app-plan.md`](../plans/2026-05-23-phase-2-soar-logic-app-plan.md) (which also has a resume context block).
 >
