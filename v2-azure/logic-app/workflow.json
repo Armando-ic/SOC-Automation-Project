@@ -1,0 +1,825 @@
+{
+    "definition": {
+        "metadata": {
+            "notes": {}
+        },
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "triggers": {
+            "Microsoft_Sentinel_incident": {
+                "type": "ApiConnectionWebhook",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                        }
+                    },
+                    "body": {
+                        "callback_url": "@listCallbackUrl()"
+                    },
+                    "path": "/incident-creation"
+                },
+                "conditions": []
+            }
+        },
+        "actions": {
+            "Get_Anthropic_key": {
+                "runAfter": {},
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['keyvault']['connectionId']"
+                        }
+                    },
+                    "method": "get",
+                    "path": "/secrets/@{encodeURIComponent('anthropic-api-key')}/value"
+                },
+                "runtimeConfiguration": {
+                    "secureData": {
+                        "properties": [
+                            "inputs",
+                            "outputs"
+                        ]
+                    }
+                }
+            },
+            "Get_VirusTotal_key": {
+                "runAfter": {},
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['keyvault']['connectionId']"
+                        }
+                    },
+                    "method": "get",
+                    "path": "/secrets/@{encodeURIComponent('virustotal-api-key')}/value"
+                },
+                "runtimeConfiguration": {
+                    "secureData": {
+                        "properties": [
+                            "inputs",
+                            "outputs"
+                        ]
+                    }
+                }
+            },
+            "Get_AbuseIPDB_key": {
+                "runAfter": {},
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['keyvault']['connectionId']"
+                        }
+                    },
+                    "method": "get",
+                    "path": "/secrets/@{encodeURIComponent('abuseipdb-api-key')}/value"
+                },
+                "runtimeConfiguration": {
+                    "secureData": {
+                        "properties": [
+                            "inputs",
+                            "outputs"
+                        ]
+                    }
+                }
+            },
+            "Compose_initial_messages": {
+                "runAfter": {
+                    "Get_VirusTotal_key": [
+                        "Succeeded"
+                    ],
+                    "Get_Anthropic_key": [
+                        "Succeeded"
+                    ],
+                    "Get_AbuseIPDB_key": [
+                        "Succeeded"
+                    ],
+                    "Init_triage_complete": [
+                        "Succeeded"
+                    ],
+                    "Init_iteration": [
+                        "Succeeded"
+                    ],
+                    "Init_messages": [
+                        "Succeeded"
+                    ],
+                    "Init_tool_results_batch": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Compose",
+                "inputs": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "@{concat('Sentinel incident: ', triggerBody()?['object']?['properties']?['title'], '\\n\\nSeverity: ', triggerBody()?['object']?['properties']?['severity'], '\\n\\nDescription: ', coalesce(triggerBody()?['object']?['properties']?['description'], 'None'), '\\n\\nAlerts:\\n', string(triggerBody()?['object']?['properties']?['alerts']), '\\n\\nEntities:\\n', string(triggerBody()?['object']?['properties']?['entities']))}"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "Compose_tools": {
+                "runAfter": {
+                    "Set_messages_from_initial": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Compose",
+                "inputs": [
+                    {
+                        "name": "enrich_ip_abuseipdb",
+                        "description": "Look up an IP address in AbuseIPDB to assess its reputation. Use when an IP address appears in the alert.",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "ip": {
+                                    "type": "string",
+                                    "description": "The IPv4 or IPv6 address to look up"
+                                }
+                            },
+                            "required": [
+                                "ip"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "lookup_file_hash_virustotal",
+                        "description": "Look up a file hash (MD5, SHA1, or SHA256) in VirusTotal. Use when a file hash appears in the alert.",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "hash": {
+                                    "type": "string",
+                                    "description": "The MD5, SHA1, or SHA256 hash"
+                                }
+                            },
+                            "required": [
+                                "hash"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "submit_triage_result",
+                        "description": "Submit your final structured triage assessment. Call this exactly once when triage is complete.",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "severity": {
+                                    "type": "string",
+                                    "enum": [
+                                        "low",
+                                        "medium",
+                                        "high",
+                                        "critical"
+                                    ]
+                                },
+                                "summary": {
+                                    "type": "string",
+                                    "description": "Prose summary of the alert and your assessment"
+                                },
+                                "iocs_enriched": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "type": {
+                                                "type": "string",
+                                                "description": "e.g. ip, sha256, md5"
+                                            },
+                                            "value": {
+                                                "type": "string"
+                                            },
+                                            "verdict": {
+                                                "type": "string",
+                                                "description": "e.g. benign, suspicious, malicious, unknown"
+                                            },
+                                            "source": {
+                                                "type": "string",
+                                                "description": "e.g. virustotal, abuseipdb"
+                                            }
+                                        },
+                                        "required": [
+                                            "type",
+                                            "value",
+                                            "verdict",
+                                            "source"
+                                        ]
+                                    }
+                                },
+                                "mitre_techniques": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string",
+                                        "description": "e.g. T1059.001"
+                                    }
+                                }
+                            },
+                            "required": [
+                                "severity",
+                                "summary",
+                                "iocs_enriched",
+                                "mitre_techniques"
+                            ]
+                        }
+                    }
+                ]
+            },
+            "Until_Claude_agent_loop": {
+                "actions": {
+                    "Call_Claude": {
+                        "type": "Http",
+                        "inputs": {
+                            "uri": "https://api.anthropic.com/v1/messages",
+                            "method": "POST",
+                            "headers": {
+                                "x-api-key": "@{body('Get_Anthropic_key')?['value']}",
+                                "anthropic-version": "2023-06-01",
+                                "content-type": "application/json"
+                            },
+                            "body": {
+                                "model": "claude-opus-4-7",
+                                "max_tokens": 4096,
+                                "system": "You are a Tier-1 SOC analyst. Summarize the alert, call enrichment tools (AbuseIPDB for IPs, VirusTotal for file hashes) when relevant IOCs appear in the alert payload, decode any base64 payloads you encounter, assess severity against the MITRE ATT&CK technique class, and call submit_triage_result with your structured assessment.",
+                                "messages": "@variables('messages')",
+                                "tools": "@outputs('Compose_tools')"
+                            }
+                        },
+                        "runtimeConfiguration": {
+                            "contentTransfer": {
+                                "transferMode": "Chunked"
+                            }
+                        }
+                    },
+                    "Parse_Claude_response": {
+                        "runAfter": {
+                            "Call_Claude": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "ParseJson",
+                        "inputs": {
+                            "content": "@body('Call_Claude')",
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {
+                                        "type": "string"
+                                    },
+                                    "model": {
+                                        "type": "string"
+                                    },
+                                    "role": {
+                                        "type": "string"
+                                    },
+                                    "stop_reason": {
+                                        "type": "string"
+                                    },
+                                    "content": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "type": {
+                                                    "type": "string"
+                                                },
+                                                "text": {
+                                                    "type": "string"
+                                                },
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "name": {
+                                                    "type": "string"
+                                                },
+                                                "input": {
+                                                    "type": "object"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "usage": {
+                                        "type": "object",
+                                        "properties": {
+                                            "input_tokens": {
+                                                "type": "integer"
+                                            },
+                                            "output_tokens": {
+                                                "type": "integer"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "Append_assistant_message": {
+                        "runAfter": {
+                            "Parse_Claude_response": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "AppendToArrayVariable",
+                        "inputs": {
+                            "name": "messages",
+                            "value": "@addProperty(addProperty(json('{}'), 'role', 'assistant'), 'content', body('Parse_Claude_response')?['content'])"
+                        }
+                    },
+                    "Switch_on_stop_reason": {
+                        "runAfter": {
+                            "Append_assistant_message": [
+                                "Succeeded"
+                            ]
+                        },
+                        "cases": {
+                            "tool_use": {
+                                "case": "tool_use",
+                                "actions": {
+                                    "Reset_tool_results_batch": {
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                            "name": "tool_results_batch",
+                                            "value": []
+                                        }
+                                    },
+                                    "For_each_tool_use_block": {
+                                        "foreach": "@body('Parse_Claude_response')?['content']",
+                                        "actions": {
+                                            "Is_tool_use_block": {
+                                                "actions": {
+                                                    "Switch_on_tool_name": {
+                                                        "cases": {
+                                                            "enrich_ip_abuseipdb": {
+                                                                "case": "enrich_ip_abuseipdb",
+                                                                "actions": {
+                                                                    "Call_AbuseIPDB": {
+                                                                        "type": "Http",
+                                                                        "inputs": {
+                                                                            "uri": "https://api.abuseipdb.com/api/v2/check",
+                                                                            "method": "GET",
+                                                                            "headers": {
+                                                                                "Key": "@{body('Get_AbuseIPDB_key')?['value']}",
+                                                                                "Accept": "application/json"
+                                                                            },
+                                                                            "queries": {
+                                                                                "ipAddress": "@{items('For_each_tool_use_block')?['input']?['ip']}"
+                                                                            },
+                                                                            "retryPolicy": {
+                                                                                "type": "exponential",
+                                                                                "count": 2,
+                                                                                "interval": "PT10S",
+                                                                                "minimumInterval": "PT5S",
+                                                                                "maximumInterval": "PT1M"
+                                                                            }
+                                                                        },
+                                                                        "runtimeConfiguration": {
+                                                                            "contentTransfer": {
+                                                                                "transferMode": "Chunked"
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "Compose_AbuseIPDB_tool_result": {
+                                                                        "runAfter": {
+                                                                            "Call_AbuseIPDB": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "type": "Compose",
+                                                                        "inputs": {
+                                                                            "type": "tool_result",
+                                                                            "tool_use_id": "@{items('For_each_tool_use_block')?['id']}",
+                                                                            "content": "@{string(body('Call_AbuseIPDB'))}"
+                                                                        }
+                                                                    },
+                                                                    "Append_AbuseIPDB_to_batch": {
+                                                                        "runAfter": {
+                                                                            "Compose_AbuseIPDB_tool_result": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "type": "AppendToArrayVariable",
+                                                                        "inputs": {
+                                                                            "name": "tool_results_batch",
+                                                                            "value": "@outputs('Compose_AbuseIPDB_tool_result')"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "lookup_file_hash_virustotal": {
+                                                                "case": "lookup_file_hash_virustotal",
+                                                                "actions": {
+                                                                    "Call_Virustotal": {
+                                                                        "type": "Http",
+                                                                        "inputs": {
+                                                                            "uri": "@concat('https://www.virustotal.com/api/v3/files/', items('For_each_tool_use_block')?['input']?['hash'])",
+                                                                            "method": "GET",
+                                                                            "headers": {
+                                                                                "x-apikey": "@{body('Get_VirusTotal_key')?['value']}",
+                                                                                "Accept": "application/json"
+                                                                            },
+                                                                            "retryPolicy": {
+                                                                                "type": "exponential",
+                                                                                "count": 2,
+                                                                                "interval": "PT10S",
+                                                                                "minimumInterval": "PT5S",
+                                                                                "maximumInterval": "PT1M"
+                                                                            }
+                                                                        },
+                                                                        "runtimeConfiguration": {
+                                                                            "contentTransfer": {
+                                                                                "transferMode": "Chunked"
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "Compose_VirusTotal_tool_result": {
+                                                                        "runAfter": {
+                                                                            "Call_Virustotal": [
+                                                                                "Succeeded",
+                                                                                "Failed"
+                                                                            ]
+                                                                        },
+                                                                        "type": "Compose",
+                                                                        "inputs": {
+                                                                            "type": "tool_result",
+                                                                            "tool_use_id": "@{items('For_each_tool_use_block')?['id']}",
+                                                                            "content": "@{string(body('Call_Virustotal'))}"
+                                                                        }
+                                                                    },
+                                                                    "Append_VirusTotal_to_batch": {
+                                                                        "runAfter": {
+                                                                            "Compose_VirusTotal_tool_result": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "type": "AppendToArrayVariable",
+                                                                        "inputs": {
+                                                                            "name": "tool_results_batch",
+                                                                            "value": "@outputs('Compose_VirusTotal_tool_result')"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "submit_triage_result": {
+                                                                "case": "submit_triage_result",
+                                                                "actions": {
+                                                                    "Mark_triage_complete": {
+                                                                        "runAfter": {
+                                                                            "Set_triage_result": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "type": "SetVariable",
+                                                                        "inputs": {
+                                                                            "name": "triage_complete",
+                                                                            "value": true
+                                                                        }
+                                                                    },
+                                                                    "Set_triage_result": {
+                                                                        "type": "SetVariable",
+                                                                        "inputs": {
+                                                                            "name": "triage_result",
+                                                                            "value": "@items('For_each_tool_use_block')?['input']"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "default": {
+                                                            "actions": {}
+                                                        },
+                                                        "expression": "@items('For_each_tool_use_block')?['name']",
+                                                        "type": "Switch"
+                                                    }
+                                                },
+                                                "else": {
+                                                    "actions": {}
+                                                },
+                                                "expression": {
+                                                    "and": [
+                                                        {
+                                                            "equals": [
+                                                                "@items('For_each_tool_use_block')?['type']",
+                                                                "tool_use"
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "type": "If"
+                                            }
+                                        },
+                                        "runAfter": {
+                                            "Reset_tool_results_batch": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "Foreach",
+                                        "operationOptions": "Sequential"
+                                    },
+                                    "Append_messages_with_tool_results": {
+                                        "runAfter": {
+                                            "For_each_tool_use_block": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "AppendToArrayVariable",
+                                        "inputs": {
+                                            "name": "messages",
+                                            "value": "@addProperty(addProperty(json('{}'), 'role', 'user'), 'content', variables('tool_results_batch'))"
+                                        }
+                                    }
+                                }
+                            },
+                            "end_turn": {
+                                "case": "end_turn",
+                                "actions": {
+                                    "Compose_error_end_turn": {
+                                        "type": "Compose",
+                                        "inputs": "Claude returned end_turn without calling submit_triage_result. No structured triage produced."
+                                    },
+                                    "Force_loop_exit_end_turn": {
+                                        "runAfter": {
+                                            "Compose_error_end_turn": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                            "name": "triage_complete",
+                                            "value": true
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "default": {
+                            "actions": {
+                                "Compose_error_default": {
+                                    "type": "Compose",
+                                    "inputs": "@{concat('Claude returned unexpected stop_reason: ', coalesce(body('Parse_Claude_response')?['stop_reason'], 'null'))}"
+                                },
+                                "Force_loop_exit_default": {
+                                    "runAfter": {
+                                        "Compose_error_default": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "triage_complete",
+                                        "value": true
+                                    }
+                                }
+                            }
+                        },
+                        "expression": "@body('Parse_Claude_response')?['stop_reason']",
+                        "type": "Switch"
+                    },
+                    "Increment_iteration": {
+                        "runAfter": {
+                            "Switch_on_stop_reason": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "IncrementVariable",
+                        "inputs": {
+                            "name": "iteration",
+                            "value": 1
+                        }
+                    }
+                },
+                "runAfter": {
+                    "Compose_tools": [
+                        "Succeeded"
+                    ]
+                },
+                "expression": "@or(equals(variables('triage_complete'), true), greaterOrEquals(variables('iteration'), 10))",
+                "limit": {
+                    "count": 12,
+                    "timeout": "PT15M"
+                },
+                "type": "Until"
+            },
+            "Init_triage_complete": {
+                "runAfter": {},
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "triage_complete",
+                            "type": "boolean",
+                            "value": false
+                        }
+                    ]
+                }
+            },
+            "Init_iteration": {
+                "runAfter": {},
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "iteration",
+                            "type": "integer",
+                            "value": 0
+                        }
+                    ]
+                }
+            },
+            "Init_messages": {
+                "runAfter": {},
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "messages",
+                            "type": "array",
+                            "value": []
+                        }
+                    ]
+                }
+            },
+            "Init_tool_results_batch": {
+                "runAfter": {},
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "tool_results_batch",
+                            "type": "array",
+                            "value": []
+                        }
+                    ]
+                }
+            },
+            "Init_incident_tags": {
+                "runAfter": {},
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "incident_tags",
+                            "type": "array",
+                            "value": []
+                        }
+                    ]
+                }
+            },
+            "Set_messages_from_initial": {
+                "runAfter": {
+                    "Compose_initial_messages": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "SetVariable",
+                "inputs": {
+                    "name": "messages",
+                    "value": "@outputs('Compose_initial_messages')"
+                }
+            },
+            "Build_incident_tags": {
+                "foreach": "@coalesce(variables('triage_result')?['iocs_enriched'], createArray())",
+                "actions": {
+                    "Append_ioc_tag": {
+                        "type": "AppendToArrayVariable",
+                        "inputs": {
+                            "name": "incident_tags",
+                            "value": "@addProperty(json('{}'), 'labelName', concat('ioc:', items('Build_incident_tags')?['type'], ':', items('Build_incident_tags')?['value'], ':', items('Build_incident_tags')?['verdict']))"
+                        }
+                    }
+                },
+                "runAfter": {
+                    "Until_Claude_agent_loop": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Foreach"
+            },
+            "Conditional_severity_critical_tag": {
+                "actions": {
+                    "Append_severity_critical_tag": {
+                        "type": "AppendToArrayVariable",
+                        "inputs": {
+                            "name": "incident_tags",
+                            "value": "@addProperty(json('{}'), 'labelName', 'severity:critical')"
+                        }
+                    }
+                },
+                "runAfter": {
+                    "Build_incident_tags": [
+                        "Succeeded"
+                    ]
+                },
+                "else": {
+                    "actions": {}
+                },
+                "expression": {
+                    "and": [
+                        {
+                            "equals": [
+                                "@variables('triage_result')?['severity']",
+                                "critical"
+                            ]
+                        }
+                    ]
+                },
+                "type": "If"
+            },
+            "Update_Sentinel_Incident": {
+                "runAfter": {
+                    "Conditional_severity_critical_tag": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azuresentinel-1']['connectionId']"
+                        }
+                    },
+                    "method": "put",
+                    "body": {
+                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                        "severity": "@{if(equals(variables('triage_result')?['severity'], 'critical'), 'High', if(equals(variables('triage_result')?['severity'], 'high'), 'High', if(equals(variables('triage_result')?['severity'], 'medium'), 'Medium', if(equals(variables('triage_result')?['severity'], 'low'), 'Low', 'Informational'))))}",
+                        "labels": "@variables('incident_tags')"
+                    },
+                    "path": "/Incidents"
+                }
+            },
+            "Add_Sentinel_Comment": {
+                "runAfter": {
+                    "Update_Sentinel_Incident": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azuresentinel-1']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "body": {
+                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                        "message": "@{concat('## Claude triage (claude-opus-4-7)\n\n**Severity:** ', coalesce(variables('triage_result')?['severity'], '(none)'), '\n**MITRE:** ', if(empty(coalesce(variables('triage_result')?['mitre_techniques'], createArray())), '(none)', join(variables('triage_result')?['mitre_techniques'], ', ')), '\n\n', coalesce(variables('triage_result')?['summary'], '(no summary produced)'), '\n\n### IOCs enriched\n', if(empty(coalesce(variables('triage_result')?['iocs_enriched'], createArray())), '(none)', concat('See ', string(length(variables('triage_result')?['iocs_enriched'])), ' `ioc:*` tag(s) on this incident.')))}"
+                    },
+                    "path": "/Incidents/Comment"
+                }
+            },
+            "Init_triage_result": {
+                "runAfter": {},
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "triage_result",
+                            "type": "object",
+                            "value": {}
+                        }
+                    ]
+                }
+            }
+        },
+        "outputs": {},
+        "parameters": {
+            "$connections": {
+                "type": "Object",
+                "defaultValue": {}
+            }
+        }
+    },
+    "parameters": {
+        "$connections": {
+            "type": "Object",
+            "value": {
+                "azuresentinel": {
+                    "id": "/subscriptions/3718c265-d620-4e68-b344-ac484d2dd3a5/providers/Microsoft.Web/locations/centralus/managedApis/azuresentinel",
+                    "connectionId": "/subscriptions/3718c265-d620-4e68-b344-ac484d2dd3a5/resourceGroups/rg-soc-v2-azure-central-us/providers/Microsoft.Web/connections/azuresentinel",
+                    "connectionName": "azuresentinel",
+                    "connectionProperties": {}
+                },
+                "keyvault": {
+                    "id": "/subscriptions/3718c265-d620-4e68-b344-ac484d2dd3a5/providers/Microsoft.Web/locations/centralus/managedApis/keyvault",
+                    "connectionId": "/subscriptions/3718c265-d620-4e68-b344-ac484d2dd3a5/resourceGroups/rg-soc-v2-azure-central-us/providers/Microsoft.Web/connections/keyvault",
+                    "connectionName": "keyvault",
+                    "connectionProperties": {
+                        "authentication": {
+                            "type": "ManagedServiceIdentity"
+                        }
+                    }
+                },
+                "azuresentinel-1": {
+                    "id": "/subscriptions/3718c265-d620-4e68-b344-ac484d2dd3a5/providers/Microsoft.Web/locations/centralus/managedApis/azuresentinel",
+                    "connectionId": "/subscriptions/3718c265-d620-4e68-b344-ac484d2dd3a5/resourceGroups/rg-soc-v2-azure-central-us/providers/Microsoft.Web/connections/azuresentinel",
+                    "connectionName": "azuresentinel",
+                    "connectionProperties": {}
+                }
+            }
+        }
+    }
+}
